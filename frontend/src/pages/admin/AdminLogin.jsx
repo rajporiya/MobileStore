@@ -49,7 +49,7 @@ export default function AdminLogin() {
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 className="input"
-                placeholder="admin@mobilestore.com"
+                placeholder="Enter your admin email"
                 required
               />
             </div>
@@ -73,11 +73,6 @@ export default function AdminLogin() {
               {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </form>
-          <div className="mt-5 bg-primary-50 rounded-xl px-4 py-3 text-xs text-stone-600">
-            <p className="font-semibold mb-1">Demo credentials:</p>
-            <p>Email: <span className="font-mono">admin@mobilestore.com</span></p>
-            <p>Password: <span className="font-mono">admin@123</span></p>
-          </div>
         </div>
       </div>
     </div>

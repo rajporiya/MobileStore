@@ -11,16 +11,9 @@ router.post(
   asyncHandler(async (req, res) => {
     const { amount } = req.body;
 
-    if (!process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID === 'your_razorpay_key_id') {
-      return res.json({
-        success: true,
-        data: {
-          id: `order_demo_${Date.now()}`,
-          amount: amount * 100,
-          currency: 'INR',
-          key: 'rzp_test_demo',
-        },
-      });
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET || process.env.RAZORPAY_KEY_ID === 'your_razorpay_key_id') {
+      res.status(503);
+      throw new Error('Razorpay is not configured');
     }
 
     const Razorpay = require('razorpay');
@@ -52,10 +45,8 @@ router.post(
     const { amount } = req.body;
 
     if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'your_stripe_secret_key') {
-      return res.json({
-        success: true,
-        data: { clientSecret: `pi_demo_secret_${Date.now()}` },
-      });
+      res.status(503);
+      throw new Error('Stripe is not configured');
     }
 
     const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);

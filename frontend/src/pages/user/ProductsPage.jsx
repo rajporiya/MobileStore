@@ -5,8 +5,8 @@ import { FiFilter, FiX, FiChevronDown } from 'react-icons/fi'
 import { fetchProducts } from '../../store/slices/productSlice'
 import ProductCard from '../../components/user/ProductCard'
 import { ProductCardSkeleton } from '../../components/common/Skeletons'
+import api from '../../services/api'
 
-const BRANDS = ['Apple', 'Samsung', 'iQOO', 'MI', 'OPPO', 'VIVO', 'MOTOROLA']
 const SORT_OPTIONS = [
   { label: 'Newest First', value: 'newest' },
   { label: 'Price: Low to High', value: 'price-asc' },
@@ -20,9 +20,11 @@ export default function ProductsPage() {
   const { items, loading, page, pages, total } = useSelector((s) => s.products)
 
   const [filterOpen, setFilterOpen] = useState(false)
+  const [categories, setCategories] = useState([])
 
   const currentSearch = searchParams.get('search') || ''
   const currentBrand = searchParams.get('brand') || ''
+  const currentCategory = searchParams.get('category') || ''
   const currentSort = searchParams.get('sort') || 'newest'
   const currentPage = Number(searchParams.get('page')) || 1
   const currentFeatured = searchParams.get('featured') || ''
@@ -33,6 +35,7 @@ export default function ProductsPage() {
     const params = {}
     if (currentSearch) params.search = currentSearch
     if (currentBrand) params.brand = currentBrand
+    if (currentCategory) params.category = currentCategory
     if (currentSort) params.sort = currentSort
     if (currentFeatured) params.featured = currentFeatured
     if (currentMin) params.minPrice = currentMin
@@ -40,7 +43,11 @@ export default function ProductsPage() {
     params.page = currentPage
     params.limit = 12
     dispatch(fetchProducts(params))
-  }, [dispatch, currentSearch, currentBrand, currentSort, currentFeatured, currentPage, currentMin, currentMax])
+  }, [dispatch, currentSearch, currentBrand, currentCategory, currentSort, currentFeatured, currentPage, currentMin, currentMax])
+
+  useEffect(() => {
+    api.get('/categories').then((res) => setCategories(res.data.data || [])).catch(() => setCategories([]))
+  }, [])
 
   const setParam = (key, value) => {
     setSearchParams((prev) => {
@@ -56,7 +63,7 @@ export default function ProductsPage() {
     setSearchParams({})
   }
 
-  const hasFilters = currentSearch || currentBrand || currentFeatured || currentMin || currentMax
+  const hasFilters = currentSearch || currentBrand || currentCategory || currentFeatured || currentMin || currentMax
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -97,19 +104,19 @@ export default function ProductsPage() {
       {filterOpen && (
         <div className="bg-white rounded-2xl border border-cream-200 p-5 mb-6 shadow-sm">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* Brand filter */}
+            {/* Category filter */}
             <div>
-              <p className="text-xs font-semibold text-stone-600 uppercase tracking-wider mb-2">Brand</p>
+              <p className="text-xs font-semibold text-stone-600 uppercase tracking-wider mb-2">Category</p>
               <div className="flex flex-wrap gap-1.5">
-                {BRANDS.map((brand) => (
+                {categories.map((category) => (
                   <button
-                    key={brand}
-                    onClick={() => setParam('brand', currentBrand === brand ? '' : brand)}
+                    key={category._id}
+                    onClick={() => setParam('category', currentCategory === category._id ? '' : category._id)}
                     className={`text-xs px-2.5 py-1 rounded-full border transition-colors font-medium
-                      ${currentBrand === brand ? 'bg-brown text-white border-brown'
+                      ${currentCategory === category._id ? 'bg-brown text-white border-brown'
                         : 'bg-cream-50 text-stone-600 border-cream-300 hover:border-brown-light'}`}
                   >
-                    {brand}
+                    {category.name}
                   </button>
                 ))}
               </div>

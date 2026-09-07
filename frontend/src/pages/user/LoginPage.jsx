@@ -78,13 +78,6 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Demo credentials */}
-          <div className="mt-4 bg-cream-50 rounded-xl p-3 text-xs text-stone-600 border border-cream-200">
-            <p className="font-semibold text-stone-700 mb-1">Demo Credentials:</p>
-            <p>User: demo@mobilestore.com / demo@123</p>
-            <p>Admin: admin@mobilestore.com / admin@123</p>
-          </div>
-
           <p className="text-center text-sm text-stone-500 mt-5">
             Don't have an account?{' '}
             <Link to="/register" className="text-brown font-semibold hover:text-brown-dark">
