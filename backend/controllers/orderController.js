@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const { sendOrderConfirmation } = require('../services/whatsappService');
+const { sendOrderSms } = require('../services/smsService');
 
 // @desc  Create new order
 // @route POST /api/orders
@@ -73,6 +74,21 @@ const createOrder = asyncHandler(async (req, res) => {
     order.whatsappNotification.status = 'failed';
     order.whatsappNotification.error = error.message;
     console.error(`WhatsApp notification failed for order ${order._id}: ${error.message}`);
+  }
+
+  try {
+    const notification = await sendOrderSms(order);
+    if (notification.skipped) {
+      order.smsNotification.status = 'not_configured';
+    } else {
+      order.smsNotification.status = 'sent';
+      order.smsNotification.messageId = notification.messageId;
+      order.smsNotification.sentAt = new Date();
+    }
+  } catch (error) {
+    order.smsNotification.status = 'failed';
+    order.smsNotification.error = error.message;
+    console.error(`SMS notification failed for order ${order._id}: ${error.message}`);
   }
   await order.save();
 
