@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background-color: #fdf8f0;
+    color: #3d2b1f;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #faf3e8;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #c8956c;
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brown text-white px-5 py-2.5 rounded-xl font-semibold
+           hover:bg-brown-dark transition-all duration-200 active:scale-95 shadow-sm;
+  }
+
+  .btn-secondary {
+    @apply bg-cream-200 text-brown-dark border border-brown-light px-5 py-2.5 rounded-xl font-semibold
+           hover:bg-cream-300 transition-all duration-200 active:scale-95;
+  }
+
+  .btn-outline {
+    @apply border-2 border-brown text-brown px-5 py-2.5 rounded-xl font-semibold
+           hover:bg-brown hover:text-white transition-all duration-200 active:scale-95;
+  }
+
+  .card {
+    @apply bg-white rounded-2xl shadow-card hover:shadow-card-hover transition-all duration-300;
+  }
+
+  .input {
+    @apply w-full border border-cream-300 rounded-xl px-4 py-2.5 text-sm
+           focus:outline-none focus:ring-2 focus:ring-brown-light focus:border-transparent
+           bg-cream-50 placeholder-stone-400 transition-all duration-200;
+  }
+
+  .section-title {
+    @apply text-2xl md:text-3xl font-bold text-brown-dark text-center mb-2;
+  }
+
+  .section-subtitle {
+    @apply text-stone-500 text-center mb-8 text-sm md:text-base;
+  }
+
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+
+  .badge-green {
+    @apply badge bg-green-100 text-green-800;
+  }
+
+  .badge-yellow {
+    @apply badge bg-yellow-100 text-yellow-800;
+  }
+
+  .badge-red {
+    @apply badge bg-red-100 text-red-800;
+  }
+
+  .badge-blue {
+    @apply badge bg-blue-100 text-blue-800;
+  }
+
+  .badge-brown {
+    @apply badge bg-primary-100 text-primary-800;
+  }
+}
