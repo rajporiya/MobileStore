@@ -12,13 +12,22 @@ export const loginUser = createAsyncThunk('auth/login', async (credentials, { re
   }
 })
 
-export const registerUser = createAsyncThunk('auth/register', async (userData, { rejectWithValue }) => {
+export const requestRegistrationOtp = createAsyncThunk('auth/requestRegistrationOtp', async (userData, { rejectWithValue }) => {
   try {
-    const { data } = await api.post('/auth/register', userData)
+    const { data } = await api.post('/auth/register/request-otp', userData)
+    return data.message
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || 'Could not send verification code')
+  }
+})
+
+export const verifyRegistrationOtp = createAsyncThunk('auth/verifyRegistrationOtp', async (dataToVerify, { rejectWithValue }) => {
+  try {
+    const { data } = await api.post('/auth/register/verify-otp', dataToVerify)
     localStorage.setItem('userInfo', JSON.stringify(data.data))
     return data.data
   } catch (err) {
-    return rejectWithValue(err.response?.data?.message || 'Registration failed')
+    return rejectWithValue(err.response?.data?.message || 'Verification failed')
   }
 })
 
@@ -68,13 +77,23 @@ const authSlice = createSlice({
         state.error = action.payload
         toast.error(action.payload)
       })
-      .addCase(registerUser.pending, (state) => { state.loading = true; state.error = null })
-      .addCase(registerUser.fulfilled, (state, action) => {
+      .addCase(requestRegistrationOtp.pending, (state) => { state.loading = true; state.error = null })
+      .addCase(requestRegistrationOtp.fulfilled, (state) => {
+        state.loading = false
+        toast.success('Verification code sent to your email')
+      })
+      .addCase(requestRegistrationOtp.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload
+        toast.error(action.payload)
+      })
+      .addCase(verifyRegistrationOtp.pending, (state) => { state.loading = true; state.error = null })
+      .addCase(verifyRegistrationOtp.fulfilled, (state, action) => {
         state.loading = false
         state.userInfo = action.payload
         toast.success(`Welcome to Mobile Store, ${action.payload.name}!`)
       })
-      .addCase(registerUser.rejected, (state, action) => {
+      .addCase(verifyRegistrationOtp.rejected, (state, action) => {
         state.loading = false
         state.error = action.payload
         toast.error(action.payload)

@@ -1,13 +1,17 @@
 const asyncHandler = require('express-async-handler');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const PendingRegistration = require('../models/PendingRegistration');
+const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { sendRegistrationOtp } = require('../services/emailService');
 
 const generateToken = (id) =>
   jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
 
-// @desc  Register new user
-// @route POST /api/auth/register
-const registerUser = asyncHandler(async (req, res) => {
+// @desc  Send registration verification code. No user is created at this step.
+// @route POST /api/auth/register/request-otp
+const requestRegistrationOtp = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
   if (!name || !email || !password) {
@@ -15,13 +19,79 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new Error('Please provide all fields');
   }
 
-  const userExists = await User.findOne({ email });
+  const normalizedEmail = email.trim().toLowerCase();
+  const userExists = await User.findOne({ email: normalizedEmail });
   if (userExists) {
     res.status(400);
     throw new Error('User already exists with this email');
   }
 
-  const user = await User.create({ name, email, password });
+  if (password.length < 6) {
+    res.status(400);
+    throw new Error('Password must be at least 6 characters');
+  }
+
+  const otp = crypto.randomInt(100000, 1000000).toString();
+  const [passwordHash, otpHash] = await Promise.all([
+    bcrypt.hash(password, 10),
+    bcrypt.hash(otp, 10),
+  ]);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  await PendingRegistration.findOneAndUpdate(
+    { email: normalizedEmail },
+    { name: name.trim(), passwordHash, otpHash, expiresAt, attempts: 0 },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+
+  try {
+    await sendRegistrationOtp({ email: normalizedEmail, name: name.trim(), otp });
+  } catch (error) {
+    await PendingRegistration.deleteOne({ email: normalizedEmail });
+    res.status(503);
+    throw error;
+  }
+
+  res.json({ success: true, message: 'Verification code sent to your email' });
+});
+
+// @desc  Verify registration code and create user account
+// @route POST /api/auth/register/verify-otp
+const verifyRegistrationOtp = asyncHandler(async (req, res) => {
+  const { email, otp } = req.body;
+  const normalizedEmail = email?.trim().toLowerCase();
+  const pending = await PendingRegistration.findOne({ email: normalizedEmail });
+
+  if (!pending || pending.expiresAt < new Date()) {
+    if (pending) await pending.deleteOne();
+    res.status(400);
+    throw new Error('This verification code has expired. Request a new code.');
+  }
+  if (pending.attempts >= 5) {
+    await pending.deleteOne();
+    res.status(429);
+    throw new Error('Too many incorrect attempts. Request a new code.');
+  }
+  if (!(await bcrypt.compare(String(otp || ''), pending.otpHash))) {
+    pending.attempts += 1;
+    await pending.save();
+    res.status(400);
+    throw new Error('Invalid verification code');
+  }
+
+  const userExists = await User.findOne({ email: normalizedEmail });
+  if (userExists) {
+    await pending.deleteOne();
+    res.status(400);
+    throw new Error('User already exists with this email');
+  }
+
+  const user = await User.create({
+    name: pending.name,
+    email: pending.email,
+    password: pending.passwordHash,
+  });
+  await pending.deleteOne();
 
   res.status(201).json({
     success: true,
@@ -108,4 +178,4 @@ const updateProfile = asyncHandler(async (req, res) => {
   });
 });
 
-module.exports = { registerUser, loginUser, getMe, updateProfile };
+module.exports = { requestRegistrationOtp, verifyRegistrationOtp, loginUser, getMe, updateProfile };
