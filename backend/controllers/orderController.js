@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const { sendOrderConfirmation } = require('../services/whatsappService');
 
 // @desc  Create new order
 // @route POST /api/orders
@@ -57,6 +58,23 @@ const createOrder = asyncHandler(async (req, res) => {
       $inc: { stock: -item.quantity },
     });
   }
+
+  // A message failure must never undo a successfully placed order.
+  try {
+    const notification = await sendOrderConfirmation(order);
+    if (notification.skipped) {
+      order.whatsappNotification.status = 'not_configured';
+    } else {
+      order.whatsappNotification.status = 'sent';
+      order.whatsappNotification.messageId = notification.messageId;
+      order.whatsappNotification.sentAt = new Date();
+    }
+  } catch (error) {
+    order.whatsappNotification.status = 'failed';
+    order.whatsappNotification.error = error.message;
+    console.error(`WhatsApp notification failed for order ${order._id}: ${error.message}`);
+  }
+  await order.save();
 
   res.status(201).json({ success: true, data: order });
 });

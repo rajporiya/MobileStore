@@ -49,6 +49,16 @@ const orderSchema = new mongoose.Schema(
       enum: ['pending', 'paid', 'failed', 'refunded'],
       default: 'pending',
     },
+    whatsappNotification: {
+      status: {
+        type: String,
+        enum: ['not_configured', 'sent', 'failed'],
+        default: 'not_configured',
+      },
+      messageId: { type: String, default: '' },
+      error: { type: String, default: '' },
+      sentAt: { type: Date },
+    },
     orderStatus: {
       type: String,
       enum: ['processing', 'confirmed', 'shipped', 'delivered', 'cancelled'],
