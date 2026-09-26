@@ -2,6 +2,7 @@ const asyncHandler = require('express-async-handler');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 const TradeInRequest = require('../models/TradeInRequest');
+const { syncExchangeWithOrder } = require('./tradeInController');
 const { sendOrderConfirmation } = require('../services/whatsappService');
 const { sendOrderSms } = require('../services/smsService');
 
@@ -233,8 +234,73 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
     throw new Error('Order not found');
   }
 
-  order.orderStatus = req.body.orderStatus || order.orderStatus;
-  if (req.body.orderStatus === 'delivered') {
+  const nextStatus = req.body.orderStatus || order.orderStatus;
+  const wasCancelled = order.orderStatus === 'cancelled';
+  const willCancel = nextStatus === 'cancelled' && !wasCancelled;
+  const willRestore = wasCancelled && nextStatus !== 'cancelled';
+
+  // Cancelling releases the stock and hands the old phone back to the customer,
+  // so an approved trade-in becomes reusable instead of being locked forever.
+  if (willCancel) {
+    if (order.orderStatus !== 'delivered') {
+      for (const item of order.orderItems) {
+        await Product.updateOne(
+          { _id: item.product },
+          { $inc: { stock: item.quantity } }
+        );
+      }
+    }
+
+    if (order.tradeIn?.request) {
+      const request = await TradeInRequest.findById(order.tradeIn.request);
+      if (request && request.linkedOrder?.toString() === order._id.toString()) {
+        request.linkedOrder = undefined;
+        if (request.status === 'approved' || request.status === 'completed') {
+          request.status = 'approved';
+        }
+        await request.save();
+      }
+      // Keep the request id so the order can be restored, but drop the credit.
+      order.tradeIn.value = 0;
+      order.tradeIn.status = 'released';
+    }
+
+    order.tradeInValue = 0;
+    order.cancelledAt = new Date();
+    order.cancelReason = req.body.reason || '';
+  }
+
+  // Putting a cancelled order back means taking the stock out again.
+  if (willRestore) {
+    for (const item of order.orderItems) {
+      const product = await Product.findById(item.product);
+      if (!product || product.stock < item.quantity) {
+        res.status(400);
+        throw new Error(
+          `Cannot restore — only ${product?.stock ?? 0} left of ${item.title}`
+        );
+      }
+      await Product.updateOne(
+        { _id: item.product },
+        { $inc: { stock: -item.quantity } }
+      );
+    }
+
+    if (order.tradeIn?.request) {
+      const request = await TradeInRequest.findById(order.tradeIn.request);
+      if (request && !request.linkedOrder) {
+        request.linkedOrder = order._id;
+        await request.save();
+        await syncExchangeWithOrder(request);
+      }
+    }
+
+    order.cancelledAt = undefined;
+    order.cancelReason = '';
+  }
+
+  order.orderStatus = nextStatus;
+  if (nextStatus === 'delivered') {
     order.deliveredAt = Date.now();
     order.paymentStatus = 'paid';
   }
@@ -246,10 +312,35 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
 // @desc  Get admin dashboard stats
 // @route GET /api/orders/stats
 const getOrderStats = asyncHandler(async (req, res) => {
+  // ---- Purchase orders ----
   const totalOrders = await Order.countDocuments();
-  const totalRevenue = await Order.aggregate([
-    { $match: { paymentStatus: 'paid' } },
+
+  // Income only counts orders that were paid and not cancelled.
+  const incomeResult = await Order.aggregate([
+    { $match: { paymentStatus: 'paid', orderStatus: { $ne: 'cancelled' } } },
     { $group: { _id: null, total: { $sum: '$totalPrice' } } },
+  ]);
+  const totalIncome = incomeResult[0]?.total || 0;
+
+  const pendingResult = await Order.aggregate([
+    { $match: { orderStatus: { $in: ['processing', 'confirmed', 'shipped'] } } },
+    { $group: { _id: null, total: { $sum: '$totalPrice' } } },
+  ]);
+
+  // Value of the orders the admin threw away.
+  const cancelledResult = await Order.aggregate([
+    { $match: { orderStatus: 'cancelled' } },
+    {
+      $group: {
+        _id: null,
+        count: { $sum: 1 },
+        value: { $sum: '$totalPrice' },
+      },
+    },
+  ]);
+
+  const ordersByStatus = await Order.aggregate([
+    { $group: { _id: '$orderStatus', count: { $sum: 1 } } },
   ]);
 
   const recentOrders = await Order.find()
@@ -257,22 +348,71 @@ const getOrderStats = asyncHandler(async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(5);
 
-  const ordersByStatus = await Order.aggregate([
-    { $group: { _id: '$orderStatus', count: { $sum: 1 } } },
+  const monthlyRevenue = await Order.aggregate([
+    { $match: { paymentStatus: 'paid', orderStatus: { $ne: 'cancelled' } } },
+    {
+      $group: {
+        _id: {
+          year: { $year: '$createdAt' },
+          month: { $month: '$createdAt' },
+        },
+        revenue: { $sum: '$totalPrice' },
+        orders: { $sum: 1 },
+      },
+    },
+    { $sort: { '_id.year': -1, '_id.month': -1 } },
+    { $limit: 6 },
   ]);
 
+  // ---- Sell orders (customers handing in an old phone) ----
+  const sellTotal = await TradeInRequest.countDocuments();
+  const sellByStatus = await TradeInRequest.aggregate([
+    { $group: { _id: '$status', count: { $sum: 1 } } },
+  ]);
+  const sellValueResult = await TradeInRequest.aggregate([
+    { $match: { status: { $in: ['approved', 'completed'] } } },
+    { $group: { _id: null, total: { $sum: '$dealerPrice' } } },
+  ]);
+  const recentTradeIns = await TradeInRequest.find()
+    .populate('user', 'name email')
+    .sort({ createdAt: -1 })
+    .limit(5);
+
+  const statusCount = (list, status) =>
+    list.find((row) => row._id === status)?.count || 0;
+
+  // Exchange credit actually applied to purchase orders.
   const totalExchangeValue = await Order.aggregate([
+    { $match: { orderStatus: { $ne: 'cancelled' } } },
     { $group: { _id: null, total: { $sum: '$tradeInValue' } } },
   ]);
 
   res.json({
     success: true,
     data: {
+      // Purchase orders
       totalOrders,
-      totalRevenue: totalRevenue[0]?.total || 0,
-      totalExchangeValue: totalExchangeValue[0]?.total || 0,
-      recentOrders,
+      totalIncome,
+      totalRevenue: totalIncome,
+      pendingOrderValue: pendingResult[0]?.total || 0,
+      pendingOrders:
+        statusCount(ordersByStatus, 'processing') +
+        statusCount(ordersByStatus, 'confirmed') +
+        statusCount(ordersByStatus, 'shipped'),
+      cancelledOrders: cancelledResult[0]?.count || 0,
+      cancelledOrderValue: cancelledResult[0]?.value || 0,
       ordersByStatus,
+      monthlyRevenue,
+      recentOrders,
+      // Sell orders
+      totalSellOrders: sellTotal,
+      sellPending: statusCount(sellByStatus, 'pending'),
+      sellApproved: statusCount(sellByStatus, 'approved'),
+      sellCompleted: statusCount(sellByStatus, 'completed'),
+      sellRejected: statusCount(sellByStatus, 'rejected'),
+      totalSellValue: sellValueResult[0]?.total || 0,
+      totalExchangeValue: totalExchangeValue[0]?.total || 0,
+      recentTradeIns,
     },
   });
 });

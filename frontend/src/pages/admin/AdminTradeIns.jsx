@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+import { Link } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { FiCheckCircle, FiXCircle, FiTrash2, FiRefreshCw, FiRepeat } from 'react-icons/fi'
 import {
@@ -8,6 +9,7 @@ import {
   rejectTradeInRequest,
   deleteTradeInRequest,
 } from '../../store/slices/tradeInSlice'
+import { fetchOrderStats } from '../../store/slices/orderSlice'
 
 const STATUS_TABS = [
   { key: '', label: 'All' },
@@ -19,11 +21,11 @@ const STATUS_TABS = [
 ]
 
 const STATUS_BADGE = {
-  pending: 'badge-yellow',
-  approved: 'badge-blue',
-  completed: 'badge-green',
-  rejected: 'badge-red',
-  cancelled: 'badge-red',
+  pending: 'bg-amber-100 text-amber-700',
+  approved: 'bg-violet-100 text-violet-700',
+  completed: 'bg-emerald-100 text-emerald-700',
+  rejected: 'bg-red-100 text-red-600',
+  cancelled: 'bg-slate-200 text-slate-500',
 }
 
 const CONDITION_LABELS = { excellent: 'Excellent', good: 'Good', fair: 'Fair', poor: 'Poor' }
@@ -36,6 +38,7 @@ const formatDate = (d) =>
 export default function AdminTradeIns() {
   const dispatch = useDispatch()
   const { allRequests, loading } = useSelector((s) => s.tradeIn)
+  const { adminStats } = useSelector((s) => s.orders)
 
   const [statusFilter, setStatusFilter] = useState('')
   const [selected, setSelected] = useState(null)
@@ -47,6 +50,11 @@ export default function AdminTradeIns() {
   useEffect(() => {
     dispatch(fetchAllTradeInRequests(statusFilter))
   }, [dispatch, statusFilter])
+
+  // The dashboard figures are shared so both order types agree on the numbers.
+  useEffect(() => {
+    if (!adminStats) dispatch(fetchOrderStats())
+  }, [dispatch, adminStats])
 
   const openApprove = (req) => {
     setSelected(req)
@@ -108,20 +116,43 @@ export default function AdminTradeIns() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Exchange Old Phone</h1>
-          <p className="text-slate-500 text-xs mt-0.5">
-            Approve an old phone and set its value — it is deducted from the new phone at checkout
-          </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
+            <FiRepeat className="w-5 h-5" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-slate-900">Sell Orders</h1>
+            <p className="text-slate-500 text-xs mt-0.5">
+              Old phones customers sold us. Set a value and it comes off their new phone.{' '}
+              <Link to="/admin/orders" className="text-indigo-600 font-semibold hover:underline">Purchase Orders</Link>
+            </p>
+          </div>
         </div>
         <button
           onClick={() => dispatch(fetchAllTradeInRequests(statusFilter))}
-          className="btn-secondary flex items-center gap-2"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-violet-600 px-3 py-2 rounded-xl border border-slate-200 hover:border-violet-300 transition-colors"
         >
           <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
         </button>
       </div>
+
+      {/* Sell side summary */}
+      {adminStats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { label: 'Sell Orders', value: adminStats.totalSellOrders, tone: 'text-slate-900' },
+            { label: 'Needs Value', value: adminStats.sellPending, tone: 'text-amber-600' },
+            { label: 'Approved Value', value: money(adminStats.totalSellValue), tone: 'text-violet-600' },
+            { label: 'Credited to Orders', value: money(adminStats.totalExchangeValue), tone: 'text-emerald-600' },
+          ].map(({ label, value: v, tone }) => (
+            <div key={label} className="bg-white rounded-xl border border-slate-200 px-4 py-3">
+              <p className="text-[11px] font-semibold text-slate-500">{label}</p>
+              <p className={`text-lg font-bold ${tone}`}>{v}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Filter */}
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -140,7 +171,7 @@ export default function AdminTradeIns() {
         ))}
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50">
@@ -215,7 +246,7 @@ export default function AdminTradeIns() {
                   </td>
 
                   <td className="px-4 py-3">
-                    <span className={`badge ${STATUS_BADGE[req.status] || 'badge-yellow'} capitalize`}>
+                    <span className={`text-[11px] font-bold px-2 py-1 rounded-full capitalize whitespace-nowrap ${STATUS_BADGE[req.status] || 'bg-amber-100 text-amber-700'}`}>
                       {req.status}
                     </span>
                   </td>
@@ -259,12 +290,12 @@ export default function AdminTradeIns() {
 
       {/* Approve / value modal */}
       {modal === 'approve' && selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <h2 className="font-bold text-slate-900 flex items-center gap-2">
                 <FiRepeat className="w-4 h-4 text-indigo-600" />
-                {selected.status === 'approved' ? 'Update Value' : 'Allow Exchange'} — {selected.brand} {selected.model}
+                {selected.status === 'approved' ? 'Update Value' : 'Approve Sell Order'} — {selected.brand} {selected.model}
               </h2>
               <button onClick={closeModal} className="text-slate-500 hover:text-slate-800">
                 <FiXCircle className="w-5 h-5" />
@@ -314,11 +345,12 @@ export default function AdminTradeIns() {
                 <button
                   onClick={handleApprove}
                   disabled={saving}
-                  className="btn-primary flex-1 py-3 flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 py-3 flex items-center justify-center gap-2 rounded-xl bg-violet-600 text-white text-sm font-semibold hover:bg-violet-700 transition-colors
+                    disabled:opacity-50"
                 >
-                  {saving ? 'Saving...' : 'Allow Exchange'}
+                  {saving ? 'Saving...' : 'Approve & Set Value'}
                 </button>
-                <button onClick={closeModal} className="btn-secondary">Cancel</button>
+                <button onClick={closeModal} className="px-4 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
               </div>
             </div>
           </div>
@@ -327,10 +359,10 @@ export default function AdminTradeIns() {
 
       {/* Reject modal */}
       {modal === 'reject' && selected && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
-              <h2 className="font-bold text-slate-900">Reject — {selected.brand} {selected.model}</h2>
+              <h2 className="font-bold text-slate-900 text-sm">Reject Sell Order — {selected.brand} {selected.model}</h2>
               <button onClick={closeModal} className="text-slate-500 hover:text-slate-800">
                 <FiXCircle className="w-5 h-5" />
               </button>
@@ -362,7 +394,7 @@ export default function AdminTradeIns() {
                 >
                   {saving ? 'Rejecting...' : 'Reject Exchange'}
                 </button>
-                <button onClick={closeModal} className="btn-secondary">Cancel</button>
+                <button onClick={closeModal} className="px-4 py-3 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancel</button>
               </div>
             </div>
           </div>

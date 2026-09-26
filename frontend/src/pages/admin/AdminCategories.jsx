@@ -62,7 +62,7 @@ export default function AdminCategories() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-brown-dark">Categories</h1>
+        <h1 className="text-xl font-bold text-slate-900">Categories</h1>
         <button onClick={openAdd} className="btn-primary flex items-center gap-2">
           <FiPlus className="w-4 h-4" /> Add Category
         </button>
@@ -71,20 +71,20 @@ export default function AdminCategories() {
       <div className="card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-cream-50">
+            <thead className="bg-slate-50">
               <tr>
                 {['Icon', 'Name', 'Slug', 'Status', 'Actions'].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-cream-100">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-stone-400">Loading...</td></tr>
               ) : categories.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-stone-400">No categories found.</td></tr>
               ) : categories.map((c) => (
-                <tr key={c._id} className="hover:bg-cream-50">
+                <tr key={c._id} className="hover:bg-slate-50">
                   <td className="px-4 py-3 text-2xl">{c.icon || '📦'}</td>
                   <td className="px-4 py-3 font-medium text-stone-800">{c.name}</td>
                   <td className="px-4 py-3 font-mono text-xs text-stone-500">{c.slug}</td>
@@ -95,7 +95,7 @@ export default function AdminCategories() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg hover:bg-primary-100 text-stone-500 hover:text-brown transition-colors">
+                      <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg hover:bg-primary-100 text-stone-500 hover:text-indigo-600 transition-colors">
                         <FiEdit className="w-4 h-4" />
                       </button>
                       <button onClick={() => handleDelete(c._id)} className="p-1.5 rounded-lg hover:bg-red-50 text-stone-500 hover:text-red-500 transition-colors">
@@ -114,8 +114,8 @@ export default function AdminCategories() {
       {modal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-cream-200">
-              <h2 className="font-bold text-brown-dark">{editId ? 'Edit Category' : 'Add Category'}</h2>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <h2 className="font-bold text-slate-900">{editId ? 'Edit Category' : 'Add Category'}</h2>
               <button onClick={() => setModal(false)} className="text-stone-500 hover:text-stone-800">
                 <FiX className="w-5 h-5" />
               </button>
@@ -134,7 +134,7 @@ export default function AdminCategories() {
                 <textarea rows={2} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="input resize-none" />
               </div>
               <div className="flex items-center gap-2">
-                <input type="checkbox" id="isActive" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="w-4 h-4 accent-brown" />
+                <input type="checkbox" id="isActive" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} className="w-4 h-4 accent-indigo-600" />
                 <label htmlFor="isActive" className="text-sm font-medium text-stone-700">Active</label>
               </div>
               <div className="flex gap-3 pt-2">

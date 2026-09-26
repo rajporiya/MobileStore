@@ -191,36 +191,36 @@ export default function AdminProducts() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-brown-dark">Phones</h1>
+        <h1 className="text-xl font-bold text-slate-900">Phones</h1>
         <button onClick={openAdd} className="btn-primary flex items-center gap-2">
           <FiPlus className="w-4 h-4" /> Add Phone
         </button>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-cream-50">
+            <thead className="bg-slate-50">
               <tr>
                 {['Image', 'Title', 'Brand', 'Price', 'Stock', 'Featured', 'Exchange', 'Actions'].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-cream-100">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr><td colSpan={8} className="px-4 py-8 text-center text-stone-400">Loading...</td></tr>
               ) : products.length === 0 ? (
                 <tr><td colSpan={8} className="px-4 py-8 text-center text-stone-400">No phones yet. Click "Add Phone".</td></tr>
               ) : products.map((p) => (
-                <tr key={p._id} className="hover:bg-cream-50">
+                <tr key={p._id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
-                    <img src={p.images?.[0]?.url} alt={p.title} className="w-10 h-10 rounded-lg object-cover border border-cream-200"
+                    <img src={p.images?.[0]?.url} alt={p.title} className="w-10 h-10 rounded-lg object-cover border border-slate-200"
                       onError={(e) => { e.target.src = 'https://via.placeholder.com/40?text=📱' }} />
                   </td>
                   <td className="px-4 py-3 font-medium text-stone-800 max-w-[180px] truncate">{p.title}</td>
                   <td className="px-4 py-3 text-stone-600">{p.brand}</td>
-                  <td className="px-4 py-3 font-semibold text-brown-dark">₹{p.price?.toLocaleString('en-IN')}</td>
+                  <td className="px-4 py-3 font-semibold text-slate-900">₹{p.price?.toLocaleString('en-IN')}</td>
                   <td className="px-4 py-3 text-stone-600">{p.stock}</td>
                   <td className="px-4 py-3">
                     {p.isFeatured ? <FiCheck className="w-4 h-4 text-green-500" /> : <FiX className="w-4 h-4 text-stone-300" />}
@@ -233,7 +233,7 @@ export default function AdminProducts() {
                       className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50
                         ${p.exchangeEnabled
                           ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                          : 'bg-cream-100 text-stone-400 hover:bg-cream-200'}`}
+                          : 'bg-slate-100 text-stone-400 hover:bg-slate-200'}`}
                     >
                       <FiRepeat className="w-3.5 h-3.5" />
                       {toggling === p._id ? '...' : p.exchangeEnabled ? 'Allowed' : 'Not allowed'}
@@ -241,7 +241,7 @@ export default function AdminProducts() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-2">
-                      <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-primary-100 text-stone-500 hover:text-brown transition-colors">
+                      <button onClick={() => openEdit(p)} className="p-1.5 rounded-lg hover:bg-primary-100 text-stone-500 hover:text-indigo-600 transition-colors">
                         <FiEdit className="w-4 h-4" />
                       </button>
                       <button onClick={() => handleDelete(p._id)} className="p-1.5 rounded-lg hover:bg-red-50 text-stone-500 hover:text-red-500 transition-colors">
@@ -256,10 +256,10 @@ export default function AdminProducts() {
         </div>
 
         {pages > 1 && (
-          <div className="px-4 py-3 border-t border-cream-200 flex items-center gap-2 justify-end">
+          <div className="px-4 py-3 border-t border-slate-200 flex items-center gap-2 justify-end">
             {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
               <button key={p} onClick={() => { setPage(p); fetchProducts(p) }}
-                className={`w-8 h-8 rounded-lg text-sm font-medium ${p === page ? 'bg-brown text-white' : 'bg-cream-100 text-stone-600 hover:bg-cream-200'}`}>
+                className={`w-8 h-8 rounded-lg text-sm font-medium ${p === page ? 'bg-slate-900 text-white' : 'bg-slate-100 text-stone-600 hover:bg-slate-200'}`}>
                 {p}
               </button>
             ))}
@@ -271,8 +271,8 @@ export default function AdminProducts() {
       {modal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-cream-200">
-              <h2 className="font-bold text-brown-dark">{editId ? 'Edit Phone' : 'Add Phone'}</h2>
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <h2 className="font-bold text-slate-900">{editId ? 'Edit Phone' : 'Add Phone'}</h2>
               <button onClick={closeModal} className="text-stone-500 hover:text-stone-800">
                 <FiX className="w-5 h-5" />
               </button>
@@ -306,7 +306,7 @@ export default function AdminProducts() {
                 <input type="number" min="0" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} className="input" required />
               </div>
               <div className="flex items-center gap-2 pt-4">
-                <input type="checkbox" id="featured" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} className="w-4 h-4 accent-brown" />
+                <input type="checkbox" id="featured" checked={form.isFeatured} onChange={(e) => setForm({ ...form, isFeatured: e.target.checked })} className="w-4 h-4 accent-indigo-600" />
                 <label htmlFor="featured" className="text-sm font-medium text-stone-700">Featured Product</label>
               </div>
 
@@ -320,7 +320,7 @@ export default function AdminProducts() {
                 <label className="block text-xs font-semibold text-stone-600 mb-1">
                   Phone Photos ({stagedCount}/{MAX_IMAGES})
                 </label>
-                <label className="flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-cream-300 rounded-xl cursor-pointer hover:border-brown hover:bg-cream-50 transition-colors">
+                <label className="flex items-center justify-center gap-2 px-4 py-4 border-2 border-dashed border-slate-300 rounded-xl cursor-pointer hover:border-indigo-400 hover:bg-slate-50 transition-colors">
                   <FiUpload className="w-4 h-4 text-stone-400" />
                   <span className="text-sm text-stone-600 font-medium">Click to upload photos</span>
                   <input type="file" accept="image/*" multiple onChange={handleImageChange} className="hidden" />
@@ -329,7 +329,7 @@ export default function AdminProducts() {
                 {(existingImages.length > 0 || imagePreviews.length > 0) && (
                   <div className="flex flex-wrap gap-2 mt-3">
                     {existingImages.map((img, i) => (
-                      <div key={`existing-${i}`} className="relative w-20 h-20 rounded-xl overflow-hidden border border-cream-200 group">
+                      <div key={`existing-${i}`} className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-200 group">
                         <img src={img.url} alt="" className="w-full h-full object-cover" />
                         <span className="absolute bottom-0 inset-x-0 bg-black/60 text-white text-[9px] text-center py-0.5">saved</span>
                         <button type="button" onClick={() => removeExistingImage(i)}

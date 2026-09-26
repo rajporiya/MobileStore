@@ -29,13 +29,13 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-cream-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-slate-900 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-brown-dark">VoltCart Admin</h1>
-          <p className="text-stone-500 text-sm mt-1">Sign in to your admin account</p>
+          <h1 className="text-2xl font-bold text-white">VoltCart Admin Console</h1>
+          <p className="text-slate-400 text-sm mt-1">Sign in to your admin account</p>
         </div>
-        <div className="card p-8">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xl p-8">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm mb-5">
               {error}

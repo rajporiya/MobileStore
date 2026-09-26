@@ -29,12 +29,21 @@ export const fetchAllOrders = createAsyncThunk('orders/fetchAll', async (params,
   }
 })
 
-export const updateOrderStatus = createAsyncThunk('orders/updateStatus', async ({ id, orderStatus }, { rejectWithValue }) => {
+export const updateOrderStatus = createAsyncThunk('orders/updateStatus', async ({ id, orderStatus, reason }, { rejectWithValue }) => {
   try {
-    const { data } = await api.put(`/orders/${id}/status`, { orderStatus })
+    const { data } = await api.put(`/orders/${id}/status`, { orderStatus, reason })
     return data.data
   } catch (err) {
     return rejectWithValue(err.response?.data?.message || 'Failed to update order')
+  }
+})
+
+export const fetchOrderStats = createAsyncThunk('orders/stats', async (_, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/orders/stats')
+    return data.data
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || 'Failed to fetch stats')
   }
 })
 
@@ -48,6 +57,7 @@ const orderSlice = createSlice({
     error: null,
     total: 0,
     pages: 1,
+    adminStats: null,
   },
   reducers: {
     clearCurrentOrder(state) { state.currentOrder = null },
@@ -85,10 +95,21 @@ const orderSlice = createSlice({
       .addCase(updateOrderStatus.fulfilled, (state, action) => {
         const idx = state.allOrders.findIndex((o) => o._id === action.payload._id)
         if (idx !== -1) state.allOrders[idx] = action.payload
-        toast.success('Order status updated!')
+        const { orderStatus, wasCancelled } = action.meta.arg
+        if (orderStatus === 'cancelled') {
+          toast.success('Order cancelled — stock and exchange value released')
+        } else if (wasCancelled) {
+          toast.success('Order restored')
+        } else {
+          toast.success('Order status updated!')
+        }
+        state.adminStats = null
       })
       .addCase(updateOrderStatus.rejected, (state, action) => {
         toast.error(action.payload)
+      })
+      .addCase(fetchOrderStats.fulfilled, (state, action) => {
+        state.adminStats = action.payload
       })
   },
 })

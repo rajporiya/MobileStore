@@ -33,31 +33,31 @@ export default function AdminUsers() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <h1 className="text-xl font-bold text-brown-dark">Users</h1>
+        <h1 className="text-xl font-bold text-slate-900">Users</h1>
         <span className="badge badge-brown">{users.length}</span>
       </div>
 
-      <div className="card overflow-hidden">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-cream-50">
+            <thead className="bg-slate-50">
               <tr>
                 {['User', 'Email', 'Role', 'Joined', 'Actions'].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-cream-100">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-stone-400">Loading...</td></tr>
               ) : users.length === 0 ? (
                 <tr><td colSpan={5} className="px-4 py-8 text-center text-stone-400">No users found.</td></tr>
               ) : users.map((u) => (
-                <tr key={u._id} className="hover:bg-cream-50">
+                <tr key={u._id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center shrink-0">
-                        <span className="text-brown font-semibold text-xs">{u.name?.[0]?.toUpperCase()}</span>
+                        <span className="text-indigo-600 font-semibold text-xs">{u.name?.[0]?.toUpperCase()}</span>
                       </div>
                       <span className="font-medium text-stone-800">{u.name}</span>
                     </div>
