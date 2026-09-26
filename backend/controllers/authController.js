@@ -118,6 +118,12 @@ const loginUser = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email });
 
   if (user && (await user.matchPassword(password))) {
+    // Suspended accounts keep their data but cannot sign in any more.
+    if (user.isActive === false) {
+      res.status(403);
+      throw new Error('This account has been deactivated. Contact support.');
+    }
+
     res.json({
       success: true,
       data: {
@@ -126,6 +132,7 @@ const loginUser = asyncHandler(async (req, res) => {
         email: user.email,
         role: user.role,
         phone: user.phone,
+        avatar: user.avatar,
         address: user.address,
         token: generateToken(user._id),
       },
@@ -154,11 +161,25 @@ const updateProfile = asyncHandler(async (req, res) => {
   }
 
   user.name = req.body.name || user.name;
-  user.phone = req.body.phone || user.phone;
+  user.phone = req.body.phone ?? user.phone;
+  if (req.body.avatar !== undefined) user.avatar = req.body.avatar;
   if (req.body.address) {
     user.address = { ...user.address, ...req.body.address };
   }
   if (req.body.password) {
+    // Callers that know the current password (admin settings) must prove it;
+    // the customer profile form does not send one, so it stays as it was.
+    if (req.body.currentPassword) {
+      const matches = await user.matchPassword(req.body.currentPassword);
+      if (!matches) {
+        res.status(400);
+        throw new Error('Current password is incorrect');
+      }
+    }
+    if (req.body.password.length < 6) {
+      res.status(400);
+      throw new Error('Password must be at least 6 characters');
+    }
     user.password = req.body.password;
   }
 
@@ -172,6 +193,7 @@ const updateProfile = asyncHandler(async (req, res) => {
       email: updatedUser.email,
       role: updatedUser.role,
       phone: updatedUser.phone,
+      avatar: updatedUser.avatar,
       address: updatedUser.address,
       token: generateToken(updatedUser._id),
     },

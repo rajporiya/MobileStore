@@ -5,6 +5,7 @@ import productReducer from './slices/productSlice'
 import orderReducer from './slices/orderSlice'
 import wishlistReducer from './slices/wishlistSlice'
 import tradeInReducer from './slices/tradeInSlice'
+import adminReducer from './slices/adminSlice'
 
 export const store = configureStore({
   reducer: {
@@ -14,5 +15,6 @@ export const store = configureStore({
     orders: orderReducer,
     wishlist: wishlistReducer,
     tradeIn: tradeInReducer,
+    admin: adminReducer,
   },
 })

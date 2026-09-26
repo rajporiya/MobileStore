@@ -2,15 +2,43 @@ const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const TradeInRequest = require('../models/TradeInRequest');
+
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // @desc  Get all users (Admin)
 // @route GET /api/users
 const getAllUsers = asyncHandler(async (req, res) => {
   const pageSize = Number(req.query.limit) || 20;
   const page = Number(req.query.page) || 1;
-  const count = await User.countDocuments({ role: 'user' });
 
-  const users = await User.find({ role: 'user' })
+  // Admins can look across every role; the default view stays customers only.
+  const role = ['user', 'admin', 'dealer'].includes(req.query.role)
+    ? req.query.role
+    : 'user';
+
+  const search = req.query.search?.trim();
+  const clauses = [];
+  if (search) {
+    const safe = escapeRegex(search);
+    clauses.push(
+      { name: { $regex: safe, $options: 'i' } },
+      { email: { $regex: safe, $options: 'i' } },
+      { phone: { $regex: safe, $options: 'i' } },
+      { 'dealerInfo.shopName': { $regex: safe, $options: 'i' } }
+    );
+  }
+  if (req.query.status === 'active') clauses.push({ isActive: { $ne: false } });
+  if (req.query.status === 'suspended') clauses.push({ isActive: false });
+
+  const filter = {
+    role,
+    ...(clauses.length ? { $or: clauses } : {}),
+  };
+
+  const count = await User.countDocuments(filter);
+
+  const users = await User.find(filter)
     .select('-password')
     .sort({ createdAt: -1 })
     .limit(pageSize)
@@ -36,6 +64,83 @@ const getUserById = asyncHandler(async (req, res) => {
   res.json({ success: true, data: user });
 });
 
+// @desc  Everything one account has done (Admin). Keeps the account view to a
+//        single request instead of four page-level calls.
+// @route GET /api/users/:id/activity
+const getUserActivity = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id).select('-password');
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+
+  const [orders, tradeIns, spend, tradeInCount, orderCount] = await Promise.all([
+    Order.find({ user: user._id }).sort({ createdAt: -1 }).limit(20),
+    TradeInRequest.find({ user: user._id })
+      .populate('dealer', 'name dealerInfo')
+      .sort({ createdAt: -1 })
+      .limit(20),
+    Order.aggregate([
+      {
+        $match: {
+          user: user._id,
+          paymentStatus: 'paid',
+          orderStatus: { $ne: 'cancelled' },
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$totalPrice' }, count: { $sum: 1 } } },
+    ]),
+    // The lists above are capped for display, so the lifetime totals each need
+    // their own count rather than reading the array length.
+    TradeInRequest.countDocuments({ user: user._id }),
+    Order.countDocuments({ user: user._id }),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      user,
+      orders,
+      tradeIns,
+      summary: {
+        orderCount,
+        paidOrderCount: spend[0]?.count || 0,
+        totalSpent: spend[0]?.total || 0,
+        tradeInCount,
+        wishlistCount: (user.wishlist || []).length,
+      },
+    },
+  });
+});
+
+// @desc  Suspend or restore an account (Admin)
+// @route PUT /api/users/:id/status
+const updateUserStatus = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+  if (user._id.toString() === req.user._id.toString()) {
+    res.status(400);
+    throw new Error('You cannot suspend your own account');
+  }
+  if (user.role === 'admin' && req.body.isActive === false) {
+    res.status(400);
+    throw new Error('Another admin must change this account');
+  }
+
+  user.isActive = req.body.isActive !== false;
+  await user.save();
+
+  const updated = await User.findById(user._id).select('-password');
+  res.json({
+    success: true,
+    message: updated.isActive ? 'Account restored' : 'Account suspended',
+    data: updated,
+  });
+});
+
 // @desc  Delete user (Admin)
 // @route DELETE /api/users/:id
 const deleteUser = asyncHandler(async (req, res) => {
@@ -56,6 +161,10 @@ const deleteUser = asyncHandler(async (req, res) => {
 // @route GET /api/users/stats
 const getDashboardStats = asyncHandler(async (req, res) => {
   const totalUsers = await User.countDocuments({ role: 'user' });
+  // `isActive: { $ne: false }` keeps accounts created before the flag existed
+  // counted as active instead of silently disappearing from the totals.
+  const activeUsers = await User.countDocuments({ role: 'user', isActive: { $ne: false } });
+  const totalDealers = await User.countDocuments({ role: 'dealer' });
   const totalProducts = await Product.countDocuments();
   const totalOrders = await Order.countDocuments();
   const revenueResult = await Order.aggregate([
@@ -90,6 +199,9 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     success: true,
     data: {
       totalUsers,
+      activeUsers,
+      suspendedUsers: totalUsers - activeUsers,
+      totalDealers,
       totalProducts,
       totalOrders,
       totalRevenue,
@@ -128,11 +240,90 @@ const getWishlist = asyncHandler(async (req, res) => {
 // @desc  Get all dealers (Admin)
 // @route GET /api/users/dealers
 const getAllDealers = asyncHandler(async (req, res) => {
-  const dealers = await User.find({ role: 'dealer' })
-    .select('-password')
-    .sort({ createdAt: -1 });
+  const pageSize = Number(req.query.limit) || 20;
+  const page = Number(req.query.page) || 1;
 
-  res.json({ success: true, data: dealers });
+  const clauses = [];
+  const search = req.query.search?.trim();
+  if (search) {
+    const safe = escapeRegex(search);
+    clauses.push(
+      { name: { $regex: safe, $options: 'i' } },
+      { email: { $regex: safe, $options: 'i' } },
+      { phone: { $regex: safe, $options: 'i' } },
+      { 'dealerInfo.shopName': { $regex: safe, $options: 'i' } },
+      { 'dealerInfo.city': { $regex: safe, $options: 'i' } }
+    );
+  }
+  if (req.query.status === 'active') clauses.push({ 'dealerInfo.isActive': true });
+  if (req.query.status === 'inactive') clauses.push({ 'dealerInfo.isActive': false });
+
+  const filter = {
+    role: 'dealer',
+    ...(clauses.length ? { $or: clauses } : {}),
+  };
+
+  const [count, dealers] = await Promise.all([
+    User.countDocuments(filter),
+    User.find(filter)
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .limit(pageSize)
+      .skip(pageSize * (page - 1)),
+  ]);
+
+  res.json({
+    success: true,
+    data: dealers,
+    page,
+    pages: Math.ceil(count / pageSize),
+    total: count,
+  });
+});
+
+// @desc  One dealer's profile plus the old phones routed to them (Admin)
+// @route GET /api/users/dealers/:id/activity
+const getDealerActivity = asyncHandler(async (req, res) => {
+  const dealer = await User.findById(req.params.id).select('-password');
+  if (!dealer) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+  if (dealer.role !== 'dealer') {
+    res.status(400);
+    throw new Error('This account is not a dealer');
+  }
+
+  const [tradeIns, byStatus, valued, totalRequests] = await Promise.all([
+    TradeInRequest.find({ dealer: dealer._id })
+      .populate('user', 'name email phone')
+      .populate('linkedOrder', '_id totalPrice orderStatus')
+      .sort({ createdAt: -1 })
+      .limit(25),
+    TradeInRequest.aggregate([
+      { $match: { dealer: dealer._id } },
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]),
+    TradeInRequest.aggregate([
+      { $match: { dealer: dealer._id, status: { $in: ['approved', 'completed'] } } },
+      { $group: { _id: null, total: { $sum: '$dealerPrice' } } },
+    ]),
+    // The list above is capped, so the lifetime total needs its own count.
+    TradeInRequest.countDocuments({ dealer: dealer._id }),
+  ]);
+
+  res.json({
+    success: true,
+    data: {
+      dealer,
+      tradeIns,
+      summary: {
+        byStatus: Object.fromEntries(byStatus.map((r) => [r._id, r.count])),
+        totalRequests,
+        totalValued: valued[0]?.total || 0,
+      },
+    },
+  });
 });
 
 // @desc  Promote user to dealer (Admin)
@@ -210,11 +401,14 @@ const demoteDealer = asyncHandler(async (req, res) => {
 module.exports = {
   getAllUsers,
   getUserById,
+  getUserActivity,
+  updateUserStatus,
   deleteUser,
   getDashboardStats,
   addToWishlist,
   getWishlist,
   getAllDealers,
+  getDealerActivity,
   promoteToDealer,
   updateDealer,
   demoteDealer,

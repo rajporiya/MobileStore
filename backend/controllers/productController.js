@@ -35,24 +35,28 @@ const parseSpecifications = (raw) => {
 
 const toBool = (value) => value === true || value === 'true';
 
+// User input goes straight into a $regex, so metacharacters are escaped first.
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 // @desc  Get all products with filters, search, pagination
 // @route GET /api/products
 const getProducts = asyncHandler(async (req, res) => {
   const pageSize = Number(req.query.limit) || 12;
   const page = Number(req.query.page) || 1;
 
-  const keyword = req.query.search
+  const search = req.query.search?.trim();
+  const keyword = search
     ? {
         $or: [
-          { title: { $regex: req.query.search, $options: 'i' } },
-          { brand: { $regex: req.query.search, $options: 'i' } },
-          { description: { $regex: req.query.search, $options: 'i' } },
+          { title: { $regex: escapeRegex(search), $options: 'i' } },
+          { brand: { $regex: escapeRegex(search), $options: 'i' } },
+          { description: { $regex: escapeRegex(search), $options: 'i' } },
         ],
       }
     : {};
 
   const brandFilter = req.query.brand
-    ? { brand: { $regex: req.query.brand, $options: 'i' } }
+    ? { brand: { $regex: escapeRegex(req.query.brand.trim()), $options: 'i' } }
     : {};
 
   const categoryFilter = req.query.category ? { category: req.query.category } : {};
@@ -70,12 +74,34 @@ const getProducts = asyncHandler(async (req, res) => {
   const featuredFilter =
     req.query.featured === 'true' ? { isFeatured: true } : {};
 
+  // Availability split for the admin catalogue filters.
+  const availabilityFilter =
+    req.query.availability === 'in'
+      ? { stock: { $gt: 0 } }
+      : req.query.availability === 'out'
+        ? { stock: { $lte: 0 } }
+        : req.query.availability === 'low'
+          ? { stock: { $gt: 0, $lte: 3 } }
+          : {};
+
+  const dateFilter =
+    req.query.dateFrom || req.query.dateTo
+      ? {
+          createdAt: {
+            ...(req.query.dateFrom && { $gte: new Date(req.query.dateFrom) }),
+            ...(req.query.dateTo && { $lte: new Date(req.query.dateTo) }),
+          },
+        }
+      : {};
+
   const filter = {
     ...keyword,
     ...brandFilter,
     ...categoryFilter,
     ...priceFilter,
     ...featuredFilter,
+    ...availabilityFilter,
+    ...dateFilter,
   };
 
   const sortOptions = {
@@ -83,6 +109,7 @@ const getProducts = asyncHandler(async (req, res) => {
     oldest: { createdAt: 1 },
     'price-asc': { price: 1 },
     'price-desc': { price: -1 },
+    name: { title: 1 },
     rating: { rating: -1 },
   };
   const sortBy = sortOptions[req.query.sort] || { createdAt: -1 };

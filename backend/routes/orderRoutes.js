@@ -6,6 +6,7 @@ const {
   getOrderById,
   updateOrderToPaid,
   getAllOrders,
+  getPayments,
   updateOrderStatus,
   getOrderStats,
 } = require('../controllers/orderController');
@@ -14,6 +15,8 @@ const { protect, admin } = require('../middleware/authMiddleware');
 router.post('/', protect, createOrder);
 router.get('/myorders', protect, getMyOrders);
 router.get('/stats', protect, admin, getOrderStats);
+// Declared before "/:id" so "payments" is never read as an order id.
+router.get('/payments', protect, admin, getPayments);
 router.get('/', protect, admin, getAllOrders);
 router.get('/:id', protect, getOrderById);
 router.put('/:id/pay', protect, updateOrderToPaid);

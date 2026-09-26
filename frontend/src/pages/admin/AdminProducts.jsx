@@ -1,232 +1,449 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import {
-  FiPlus, FiEdit, FiTrash2, FiX, FiCheck, FiRepeat, FiSearch, FiPackage,
+  FiEdit,
+  FiEye,
+  FiPackage,
+  FiPlus,
+  FiRepeat,
+  FiTrash2,
 } from 'react-icons/fi'
 import toast from 'react-hot-toast'
+
 import api from '../../services/api'
+import AdminPageHeader from '../../components/admin/ui/AdminPageHeader'
+import AdminTable from '../../components/admin/ui/AdminTable'
+import AdminPagination from '../../components/admin/ui/AdminPagination'
+import AdminFilterBar from '../../components/admin/ui/AdminFilterBar'
+import AdminSearchInput from '../../components/admin/ui/AdminSearchInput'
+import AdminSelect from '../../components/admin/ui/AdminSelect'
+import AdminDateRange from '../../components/admin/ui/AdminDateRange'
+import AdminActionMenu from '../../components/admin/ui/AdminActionMenu'
+import AdminStatusBadge from '../../components/admin/ui/AdminStatusBadge'
+import AdminConfirmDialog from '../../components/admin/ui/AdminConfirmDialog'
+import AdminModal from '../../components/admin/ui/AdminModal'
 import ProductForm from '../../components/admin/ProductForm'
+import { money, formatDate, errorMessage, pluralise, toDateInput } from '../../utils/adminUtils'
 
 const PER_PAGE = 20
 
+const SORTS = [
+  { value: 'newest', label: 'Newest first' },
+  { value: 'oldest', label: 'Oldest first' },
+  { value: 'price-asc', label: 'Price: low to high' },
+  { value: 'price-desc', label: 'Price: high to low' },
+  { value: 'name', label: 'Name A–Z' },
+]
+
+const AVAILABILITY = [
+  { value: 'in', label: 'In stock' },
+  { value: 'low', label: 'Low stock' },
+  { value: 'out', label: 'Out of stock' },
+]
+
+const EMPTY_FILTERS = { search: '', category: '', brand: '', sort: 'newest', availability: '', from: '', to: '' }
+
 export default function AdminProducts() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [products, setProducts] = useState([])
+  const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [editing, setEditing] = useState(null)
-  const [toggling, setToggling] = useState(null)
-  const [deleting, setDeleting] = useState(null)
-  const [page, setPage] = useState(1)
+  const [error, setError] = useState(null)
+  const [page, setPage] = useState(Number(searchParams.get('page')) || 1)
   const [pages, setPages] = useState(1)
   const [total, setTotal] = useState(0)
+  const [toggling, setToggling] = useState(null)
+  const [editing, setEditing] = useState(null)
+  const [deleting, setDeleting] = useState(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [viewing, setViewing] = useState(null)
 
-  const fetchProducts = async (p = 1) => {
+  // Filters live in the URL so a filtered list can be linked and survives reload.
+  const [filters, setFilters] = useState(() => ({
+    search: searchParams.get('search') || '',
+    category: searchParams.get('category') || '',
+    brand: searchParams.get('brand') || '',
+    sort: searchParams.get('sort') || 'newest',
+    availability: searchParams.get('availability') || '',
+    from: toDateInput(searchParams.get('dateFrom')),
+    to: toDateInput(searchParams.get('dateTo')),
+  }))
+
+  const isFiltered = useMemo(
+    () => Object.entries(filters).some(([key, value]) => value !== EMPTY_FILTERS[key]),
+    [filters]
+  )
+
+  useEffect(() => {
+    const next = {}
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value !== EMPTY_FILTERS[key]) next[key] = value
+    })
+    setSearchParams(next, { replace: true })
+  }, [filters, setSearchParams])
+
+  const fetchProducts = useCallback(async (targetPage = 1) => {
     setLoading(true)
+    setError(null)
     try {
-      const res = await api.get(`/products?page=${p}&limit=${PER_PAGE}&sort=newest`)
-      setProducts(res.data.data || [])
-      setPages(res.data.pages || 1)
-      setTotal(res.data.total || 0)
-    } catch {
-      toast.error('Failed to load phones')
-    }
-    setLoading(false)
-  }
-
-  useEffect(() => { fetchProducts() }, [])
-
-  const visible = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    if (!q) return products
-    return products.filter((p) =>
-      [p.title, p.brand, p.category?.name].some((v) => v?.toLowerCase().includes(q))
-    )
-  }, [products, search])
-
-  const handleToggleExchange = async (p) => {
-    setToggling(p._id)
-    try {
-      const res = await api.put(`/products/${p._id}/exchange`, { exchangeEnabled: !p.exchangeEnabled })
-      setProducts((prev) => prev.map((x) => (x._id === p._id ? res.data.data : x)))
-      toast.success(res.data.message)
+      const { data } = await api.get('/products', {
+        params: {
+          page: targetPage,
+          limit: PER_PAGE,
+          search: filters.search || undefined,
+          category: filters.category || undefined,
+          brand: filters.brand || undefined,
+          sort: filters.sort || undefined,
+          availability: filters.availability || undefined,
+          dateFrom: filters.from || undefined,
+          dateTo: filters.to || undefined,
+        },
+      })
+      setProducts(data.data || [])
+      setPages(data.pages || 1)
+      setTotal(data.total || 0)
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to update exchange')
+      setError(errorMessage(err, 'The phone list could not be loaded.'))
+    } finally {
+      setLoading(false)
     }
-    setToggling(null)
+  }, [filters])
+
+  useEffect(() => {
+    fetchProducts(page)
+  }, [fetchProducts, page])
+
+  useEffect(() => {
+    api
+      .get('/categories/all')
+      .then(({ data }) => setCategories(data.data || []))
+      .catch(() => setCategories([]))
+  }, [])
+
+  const setFilter = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+    setPage(1)
   }
 
-  const handleDelete = async (id) => {
-    setDeleting(id)
+  const resetFilters = () => {
+    setFilters(EMPTY_FILTERS)
+    setPage(1)
+  }
+
+  const patchProduct = (id, updated) =>
+    setProducts((prev) => prev.map((p) => (p._id === id ? { ...p, ...updated } : p)))
+
+  const handleToggleExchange = async (product) => {
+    setToggling(product._id)
     try {
-      await api.delete(`/products/${id}`)
-      toast.success('Phone deleted')
+      const { data } = await api.put(`/products/${product._id}/exchange`, {
+        exchangeEnabled: !product.exchangeEnabled,
+      })
+      patchProduct(product._id, data.data)
+      toast.success(data.message)
+    } catch (err) {
+      toast.error(errorMessage(err, 'Could not update exchange for this phone.'))
+    } finally {
+      setToggling(null)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleting) return
+    setDeleteBusy(true)
+    try {
+      await api.delete(`/products/${deleting._id}`)
+      toast.success(`"${deleting.title}" deleted`)
+      setDeleting(null)
+      // Stepping back a page avoids landing on an empty final page.
       if (products.length === 1 && page > 1) setPage(page - 1)
       else fetchProducts(page)
-      setEditing(null)
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Delete failed')
+      toast.error(errorMessage(err, 'Delete failed'))
+    } finally {
+      setDeleteBusy(false)
     }
-    setDeleting(null)
   }
 
+  const columns = [
+    { key: 'product', label: 'Phone' },
+    { key: 'category', label: 'Category' },
+    { key: 'price', label: 'Price' },
+    { key: 'stock', label: 'Stock' },
+    { key: 'flags', label: 'Flags' },
+    { key: 'actions', label: '', className: 'w-12' },
+  ]
+
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">All Phones</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            {loading ? 'Loading...' : `${total} phone${total === 1 ? '' : 's'} in the store`}
-          </p>
-        </div>
-        <Link to="/admin/add-phone" className="btn-primary flex items-center gap-2">
-          <FiPlus className="w-4 h-4" /> Add Phone
-        </Link>
-      </div>
+    <>
+      <AdminPageHeader
+        title="Products"
+        description={loading ? 'Loading the catalogue…' : `${pluralise(total, 'phone')} in the store`}
+        icon={FiPackage}
+        actions={
+          <Link to="/admin/products/add" className="btn-primary !px-4 !py-2 text-sm inline-flex items-center gap-2">
+            <FiPlus className="w-4 h-4" />
+            Add phone
+          </Link>
+        }
+      />
 
-      <div className="relative max-w-sm">
-        <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="input !pl-9"
-          placeholder="Search this page by name, brand, category"
+      <AdminFilterBar
+        isFiltered={isFiltered}
+        resultCount={total}
+        onReset={resetFilters}
+      >
+        <AdminSearchInput
+          value={filters.search}
+          onChange={(value) => setFilter('search', value)}
+          placeholder="Search by title, brand or description"
+          className="grow"
         />
-      </div>
+        <AdminSelect
+          label="Category"
+          value={filters.category}
+          onChange={(value) => setFilter('category', value)}
+          allLabel="All categories"
+          options={categories.map((c) => ({ value: c._id, label: c.name }))}
+          className="w-full sm:w-44"
+        />
+        <AdminSelect label="Sort" value={filters.sort} onChange={(value) => setFilter('sort', value)} showAll={false} options={SORTS} className="w-full sm:w-44" />
+        <AdminSelect
+          label="Availability"
+          value={filters.availability}
+          onChange={(value) => setFilter('availability', value)}
+          allLabel="Any stock level"
+          options={AVAILABILITY}
+          className="w-full sm:w-40"
+        />
+        <AdminSearchInput value={filters.brand} onChange={(value) => setFilter('brand', value)} placeholder="Brand" delay={500} className="w-full sm:w-40" />
+        <AdminDateRange
+          label="Added between"
+          from={filters.from}
+          to={filters.to}
+          onChange={({ from, to }) => {
+            setFilters((prev) => ({ ...prev, from, to }))
+            setPage(1)
+          }}
+          className="w-full sm:w-72"
+        />
+      </AdminFilterBar>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                {['Image', 'Phone', 'Brand', 'Category', 'Value', 'Stock', 'Featured', 'Exchange', 'Actions'].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-stone-400">Loading...</td></tr>
-              ) : visible.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-12 text-center">
-                    <FiPackage className="w-8 h-8 text-slate-300 mx-auto mb-3" />
-                    <p className="text-stone-500 text-sm font-medium">
-                      {search ? 'No phone matches your search.' : 'No phones yet.'}
-                    </p>
-                    {!search && (
-                      <Link to="/admin/add-phone" className="btn-primary inline-flex items-center gap-2 mt-4">
-                        <FiPlus className="w-4 h-4" /> Add your first phone
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-              ) : visible.map((p) => (
-                <tr key={p._id} className="hover:bg-slate-50">
-                  <td className="px-4 py-3">
+      <AdminTable
+        columns={columns}
+        loading={loading}
+        error={error}
+        isEmpty={products.length === 0}
+        onRetry={() => fetchProducts(page)}
+        emptyIcon={FiPackage}
+        emptyTitle={isFiltered ? 'No phone matches these filters' : 'No phones yet'}
+        emptyDescription={
+          isFiltered ? 'Try widening the search or clearing a filter.' : 'Add your first phone to start selling.'
+        }
+        emptyAction={
+          isFiltered ? (
+            <button onClick={resetFilters} className="btn-secondary !px-4 !py-2 text-sm">
+              Reset filters
+            </button>
+          ) : (
+            <Link to="/admin/products/add" className="btn-primary !px-4 !py-2 text-sm inline-flex items-center gap-2">
+              <FiPlus className="w-4 h-4" />
+              Add your first phone
+            </Link>
+          )
+        }
+        footer={
+          <AdminPagination page={page} pages={pages} total={total} onChange={setPage} itemLabel="phones" />
+        }
+      >
+        {(keyOf) =>
+          products.map((product) => (
+            <tr key={keyOf(product)} className="hover:bg-slate-50">
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {product.images?.[0]?.url ? (
                     <img
-                      src={p.images?.[0]?.url}
-                      alt={p.title}
-                      className="w-10 h-10 rounded-lg object-cover border border-slate-200"
-                      onError={(e) => { e.target.style.visibility = 'hidden' }}
+                      src={product.images[0].url}
+                      alt={product.title}
+                      loading="lazy"
+                      className="w-11 h-11 rounded-lg object-cover border border-slate-200 shrink-0"
                     />
-                  </td>
-                  <td className="px-4 py-3 font-medium text-stone-800 max-w-[200px] truncate">{p.title}</td>
-                  <td className="px-4 py-3 text-stone-600 whitespace-nowrap">{p.brand}</td>
-                  <td className="px-4 py-3 text-stone-500 text-xs whitespace-nowrap">
-                    {p.category?.name || '—'}
-                  </td>
-                  <td className="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">
-                    ₹{p.price?.toLocaleString('en-IN')}
-                  </td>
-                  <td className="px-4 py-3 text-stone-600">{p.stock}</td>
-                  <td className="px-4 py-3">
-                    {p.isFeatured
-                      ? <FiCheck className="w-4 h-4 text-green-500" />
-                      : <FiX className="w-4 h-4 text-stone-300" />}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => handleToggleExchange(p)}
-                      disabled={toggling === p._id}
-                      title={p.exchangeEnabled
-                        ? 'Customers can exchange an old phone for this — click to turn off'
-                        : 'Click to allow exchange of an old phone'}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 ${
-                        p.exchangeEnabled
-                          ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                          : 'bg-slate-100 text-stone-400 hover:bg-slate-200'
-                      }`}
+                  ) : (
+                    <span className="w-11 h-11 rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
+                      <FiPackage className="w-4 h-4 text-slate-400" />
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <Link
+                      to={`/admin/products/${product._id}`}
+                      className="block text-sm font-semibold text-slate-800 hover:text-indigo-600 truncate max-w-[220px]"
                     >
-                      <FiRepeat className="w-3.5 h-3.5" />
-                      {toggling === p._id ? '...' : p.exchangeEnabled ? 'Allowed' : 'Not allowed'}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => setEditing(p)}
-                        title="Edit phone"
-                        className="p-1.5 rounded-lg text-stone-500 hover:bg-indigo-50 hover:text-indigo-600 transition-colors"
-                      >
-                        <FiEdit className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (confirm(`Delete "${p.title}"? This cannot be undone.`)) handleDelete(p._id)
-                        }}
-                        disabled={deleting === p._id}
-                        title="Delete phone"
-                        className="p-1.5 rounded-lg text-stone-500 hover:bg-red-50 hover:text-red-500 transition-colors disabled:opacity-40"
-                      >
-                        <FiTrash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      {product.title}
+                    </Link>
+                    <p className="text-[11px] text-slate-500 truncate max-w-[220px]">
+                      {product.brand} · added {formatDate(product.createdAt)}
+                    </p>
+                  </div>
+                </div>
+              </td>
 
-        {pages > 1 && (
-          <div className="px-4 py-3 border-t border-slate-200 flex items-center gap-2 justify-end">
-            {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
-              <button
-                key={p}
-                onClick={() => { setPage(p); fetchProducts(p) }}
-                className={`w-8 h-8 rounded-lg text-sm font-medium ${
-                  p === page ? 'bg-slate-900 text-white' : 'bg-slate-100 text-stone-600 hover:bg-slate-200'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
+              <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">
+                {product.category?.name || '—'}
+              </td>
+
+              <td className="px-4 py-3 whitespace-nowrap">
+                <p className="text-sm font-bold text-slate-900">{money(product.price)}</p>
+                {product.originalPrice > product.price && (
+                  <p className="text-[11px] text-slate-400 line-through">{money(product.originalPrice)}</p>
+                )}
+              </td>
+
+              <td className="px-4 py-3 whitespace-nowrap">
+                <span
+                  className={`text-sm font-bold ${
+                    product.stock === 0 ? 'text-red-600' : product.stock <= 3 ? 'text-amber-600' : 'text-slate-700'
+                  }`}
+                >
+                  {product.stock}
+                </span>
+              </td>
+
+              <td className="px-4 py-3">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {product.isFeatured && <AdminStatusBadge value="featured" tone="indigo" label="Featured" dot={false} />}
+                  <button
+                    onClick={() => handleToggleExchange(product)}
+                    disabled={toggling === product._id}
+                    title={product.exchangeEnabled ? 'Exchange is allowed — click to turn off' : 'Click to allow trade-in for this phone'}
+                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold ring-1 ring-inset
+                      transition-colors disabled:opacity-50 ${
+                        product.exchangeEnabled
+                          ? 'bg-emerald-50 text-emerald-700 ring-emerald-600/20 hover:bg-emerald-100'
+                          : 'bg-slate-100 text-slate-500 ring-slate-500/20 hover:bg-slate-200'
+                      }`}
+                  >
+                    <FiRepeat className="w-3 h-3" />
+                    {toggling === product._id ? 'Saving…' : product.exchangeEnabled ? 'Exchange' : 'No exchange'}
+                  </button>
+                </div>
+              </td>
+
+              <td className="px-4 py-3">
+                <AdminActionMenu
+                  items={[
+                    { label: 'View details', icon: FiEye, onClick: () => setViewing(product) },
+                    { label: 'Edit', icon: FiEdit, onClick: () => setEditing(product) },
+                    { label: 'Delete', icon: FiTrash2, danger: true, onClick: () => setDeleting(product) },
+                  ]}
+                />
+              </td>
+            </tr>
+          ))
+        }
+      </AdminTable>
+
+      <AdminModal
+        open={Boolean(editing)}
+        onClose={() => setEditing(null)}
+        title={editing ? `Edit ${editing.title}` : 'Edit phone'}
+        size="xl"
+      >
+        {editing && (
+          <ProductForm
+            product={editing}
+            onCancel={() => setEditing(null)}
+            onSaved={() => {
+              setEditing(null)
+              fetchProducts(page)
+            }}
+          />
+        )}
+      </AdminModal>
+
+      <AdminModal
+        open={Boolean(viewing)}
+        onClose={() => setViewing(null)}
+        title={viewing?.title || 'Phone'}
+        description={viewing ? `${viewing.brand} · ${viewing.category?.name || 'Uncategorised'}` : ''}
+        size="lg"
+        footer={
+          <>
+            <button className="btn-secondary !px-4 !py-2 text-sm" onClick={() => setViewing(null)}>
+              Close
+            </button>
+            <Link
+              to={`/admin/products/${viewing?._id}`}
+              className="btn-primary !px-4 !py-2 text-sm inline-flex items-center gap-2"
+            >
+              <FiEye className="w-4 h-4" />
+              Open full details
+            </Link>
+          </>
+        }
+      >
+        {viewing && (
+          <div className="space-y-5">
+            <div className="flex gap-4">
+              {viewing.images?.[0]?.url && (
+                <img src={viewing.images[0].url} alt={viewing.title} className="w-24 h-24 rounded-xl object-cover border border-slate-200" />
+              )}
+              <dl className="grid grid-cols-2 gap-3 grow">
+                <div>
+                  <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Price</dt>
+                  <dd className="text-sm font-bold text-slate-900">{money(viewing.price)}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Stock</dt>
+                  <dd className="text-sm font-bold text-slate-900">{viewing.stock}</dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Rating</dt>
+                  <dd className="text-sm font-semibold text-slate-800">
+                    {viewing.rating} ({viewing.numReviews})
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Exchange</dt>
+                  <dd className="text-sm font-semibold text-slate-800">{viewing.exchangeEnabled ? 'Allowed' : 'Not allowed'}</dd>
+                </div>
+              </dl>
+            </div>
+
+            <div>
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Description</h3>
+              <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-line">{viewing.description}</p>
+            </div>
+
+            {viewing.specifications?.length > 0 && (
+              <div>
+                <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Specifications</h3>
+                <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {viewing.specifications.map((spec, i) => (
+                    <div key={`${spec.key}-${i}`} className="flex justify-between gap-4 px-3 py-2 rounded-lg bg-slate-50">
+                      <dt className="text-xs font-semibold text-slate-500">{spec.key}</dt>
+                      <dd className="text-xs font-semibold text-slate-800 text-right">{spec.value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
           </div>
         )}
-      </div>
+      </AdminModal>
 
-      {/* Edit Phone Modal */}
-      {editing && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
-              <h2 className="font-bold text-slate-900">Edit Phone</h2>
-              <button onClick={() => setEditing(null)} className="text-stone-500 hover:text-stone-800">
-                <FiX className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6">
-              <ProductForm
-                product={editing}
-                onCancel={() => setEditing(null)}
-                onSaved={() => { setEditing(null); fetchProducts(page) }}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+      <AdminConfirmDialog
+        open={Boolean(deleting)}
+        busy={deleteBusy}
+        onClose={() => setDeleting(null)}
+        onConfirm={handleDelete}
+        title="Delete this phone?"
+        confirmLabel="Delete phone"
+        message={
+          deleting
+            ? `"${deleting.title}" will be removed from the store permanently. Orders that already contain it keep their record.`
+            : ''
+        }
+      />
+    </>
   )
 }

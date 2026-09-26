@@ -1,293 +1,411 @@
-import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+import { Link } from 'react-router-dom'
 import {
-  FiShoppingCart, FiRepeat, FiDollarSign, FiTrendingUp, FiXCircle,
-  FiClock, FiUsers, FiShoppingBag, FiArrowRight, FiPackage, FiPlus, FiList
+  FiAlertTriangle,
+  FiArrowRight,
+  FiPackage,
+  FiRefreshCw,
+  FiShoppingCart,
+  FiTrendingUp,
+  FiUserCheck,
+  FiUsers,
 } from 'react-icons/fi'
-import { fetchOrderStats } from '../../store/slices/orderSlice'
 
-const money = (n) => `₹${(n || 0).toLocaleString('en-IN')}`
-const shortMoney = (n) => {
-  const v = n || 0
-  if (v >= 10000000) return `₹${(v / 10000000).toFixed(2)}Cr`
-  if (v >= 100000) return `₹${(v / 100000).toFixed(1)}L`
-  if (v >= 1000) return `₹${(v / 1000).toFixed(1)}k`
-  return `₹${v}`
-}
+import { fetchAdminDashboard, setDashboardRange } from '../../store/slices/adminSlice'
+import AdminPageHeader from '../../components/admin/ui/AdminPageHeader'
+import StatCard from '../../components/admin/ui/StatCard'
+import RevenueChart from '../../components/admin/ui/RevenueChart'
+import AdminStatusBadge from '../../components/admin/ui/AdminStatusBadge'
+import AdminAvatar from '../../components/admin/ui/AdminAvatar'
+import { SectionCard, ListRow } from '../../components/admin/ui/AdminPanels'
+import { AdminStatSkeleton, AdminPanelSkeleton } from '../../components/admin/ui/AdminSkeletons'
+import { AdminEmptyState } from '../../components/admin/ui/AdminEmptyState'
+import {
+  money,
+  shortId,
+  timeAgo,
+  errorMessage,
+  pluralise,
+  ORDER_TONE,
+  PAYMENT_TONE,
+  TRADE_IN_TONE,
+} from '../../utils/adminUtils'
 
-const SELL_BADGE = {
-  pending: 'bg-amber-100 text-amber-700',
-  approved: 'bg-indigo-100 text-indigo-700',
-  completed: 'bg-emerald-100 text-emerald-700',
-  rejected: 'bg-red-100 text-red-600',
-  cancelled: 'bg-slate-200 text-slate-500',
-}
+const RANGES = [
+  { value: '7d', label: '7 days' },
+  { value: '30d', label: '30 days' },
+  { value: '90d', label: '3 months' },
+  { value: '180d', label: '6 months' },
+  { value: '365d', label: '1 year' },
+]
 
-const ORDER_BADGE = {
-  processing: 'bg-amber-100 text-amber-700',
-  confirmed: 'bg-sky-100 text-sky-700',
-  shipped: 'bg-indigo-100 text-indigo-700',
-  delivered: 'bg-emerald-100 text-emerald-700',
-  cancelled: 'bg-red-100 text-red-600',
-}
+function StatusBreakdown({ title, byStatus, toneMap, to }) {
+  const entries = Object.entries(byStatus || {}).filter(([, count]) => count > 0)
 
-function StatCard({ label, value, sub, icon: Icon, tone }) {
-  const tones = {
-    indigo: 'bg-indigo-50 text-indigo-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    red: 'bg-red-50 text-red-500',
-    amber: 'bg-amber-50 text-amber-600',
-    slate: 'bg-slate-100 text-slate-600',
-    violet: 'bg-violet-50 text-violet-600',
-  }
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-slate-500">{label}</p>
-          <p className="text-2xl font-bold text-slate-900 mt-1 truncate">{value}</p>
-          {sub && <p className="text-[11px] text-slate-400 mt-0.5 truncate">{sub}</p>}
-        </div>
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${tones[tone]}`}>
-          <Icon className="w-5 h-5" />
-        </div>
-      </div>
-    </div>
+    <SectionCard title={title} action={<Link to={to} className="text-xs font-semibold text-indigo-600 hover:underline">View all</Link>} bodyClassName="p-5">
+      {entries.length === 0 ? (
+        <p className="text-sm text-slate-400 py-4 text-center">No records in this period.</p>
+      ) : (
+        <ul className="space-y-2.5">
+          {entries
+            .sort((a, b) => b[1] - a[1])
+            .map(([status, count]) => (
+              <li key={status} className="flex items-center gap-3">
+                <AdminStatusBadge value={status} tone={toneMap[status]} />
+                <div className="grow h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-slate-800"
+                    style={{ width: `${Math.max(6, (count / entries[0][1]) * 100)}%` }}
+                  />
+                </div>
+                <span className="text-xs font-bold text-slate-700 w-8 text-right">{count}</span>
+              </li>
+            ))}
+        </ul>
+      )}
+    </SectionCard>
   )
 }
 
 export default function AdminDashboard() {
   const dispatch = useDispatch()
-  const { adminStats: s } = useSelector((state) => state.orders)
-  const [firstLoad, setFirstLoad] = useState(true)
+  const { dashboard, dashboardLoading, dashboardError, dashboardRange } = useSelector((state) => state.admin)
 
   useEffect(() => {
-    dispatch(fetchOrderStats()).finally(() => setFirstLoad(false))
-  }, [dispatch])
+    if (!dashboard) dispatch(fetchAdminDashboard(dashboardRange))
+  }, [dispatch, dashboardRange, dashboard])
 
-  if (firstLoad || !s) {
+  const retry = () => dispatch(fetchAdminDashboard(dashboardRange))
+
+  if (dashboardError && !dashboard) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-      </div>
+      <>
+        <AdminPageHeader title="Dashboard" description="Store performance at a glance" icon={FiTrendingUp} />
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <AdminEmptyState
+            icon={FiAlertTriangle}
+            title="The dashboard could not load"
+            description={dashboardError}
+            action={
+              <button onClick={retry} className="btn-secondary !px-4 !py-2 text-sm">
+                Try again
+              </button>
+            }
+          />
+        </div>
+      </>
     )
   }
 
+  const totals = dashboard?.totals
+  const lowStock = dashboard?.lowStockProducts || []
+  const recentOrders = dashboard?.recentOrders || []
+  const recentUsers = dashboard?.recentUsers || []
+  const bestSellers = dashboard?.bestSellers || []
+  const recentDealers = dashboard?.recentDealers || []
+  const recentTradeIns = dashboard?.recentTradeIns || []
+  const activeRangeLabel = RANGES.find((r) => r.value === dashboardRange)?.label
+  const bucket = dashboard && Number(String(dashboard.range).replace('d', '')) <= 90 ? 'day' : 'month'
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">Dashboard</h1>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Purchase orders and sell orders are counted separately.
-          </p>
+    <>
+      <AdminPageHeader
+        title="Dashboard"
+        description="Store performance, payments and anything that needs a decision"
+        icon={FiTrendingUp}
+        actions={
+          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100">
+            {RANGES.map((range) => (
+              <button
+                key={range.value}
+                onClick={() => dispatch(setDashboardRange(range.value))}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                  dashboardRange === range.value ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {range.label}
+              </button>
+            ))}
+          </div>
+        }
+      />
+
+      {dashboardLoading && !dashboard ? (
+        <AdminStatSkeleton count={4} />
+      ) : (
+        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+          <StatCard
+            label="Revenue"
+            value={money(totals?.revenue)}
+            icon={FiTrendingUp}
+            tone="green"
+            onClick={() => document.getElementById('revenue-panel')?.scrollIntoView({ behavior: 'smooth' })}
+          />
+          <StatCard label="Orders" value={totals?.orders ?? 0} icon={FiShoppingCart} tone="indigo" to="/admin/orders" />
+          <StatCard label="Customers" value={totals?.users ?? 0} icon={FiUsers} tone="sky" to="/admin/users" />
+          <StatCard label="Live phones" value={totals?.products ?? 0} icon={FiPackage} tone="violet" to="/admin/products" />
         </div>
-        <Link
-          to="/admin/add-phone"
-          className="btn-primary flex items-center gap-2 shrink-0"
-        >
-          <FiPlus className="w-4 h-4" /> Add Phone
-        </Link>
-      </div>
+      )}
 
-      {/* ---------- Money ---------- */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mt-4">
         <StatCard
-          label="Total Income"
-          value={money(s.totalIncome)}
-          sub="Paid orders, cancelled excluded"
-          icon={FiDollarSign}
-          tone="emerald"
-        />
-        <StatCard
-          label="Cancelled Order Value"
-          value={money(s.cancelledOrderValue)}
-          sub={`${s.cancelledOrders} cancelled order${s.cancelledOrders === 1 ? '' : 's'}`}
-          icon={FiXCircle}
-          tone="red"
-        />
-        <StatCard
-          label="Exchange Value Given"
-          value={money(s.totalExchangeValue)}
-          sub="Old phones credited to customers"
-          icon={FiRepeat}
-          tone="violet"
-        />
-        <StatCard
-          label="In Flight Orders"
-          value={money(s.pendingOrderValue)}
-          sub={`${s.pendingOrders} not yet delivered`}
-          icon={FiClock}
+          label="Open order value"
+          value={money(totals?.pendingOrderValue)}
+          icon={FiShoppingCart}
           tone="amber"
+          to="/admin/orders?status=processing"
+        />
+        <StatCard
+          label="Dealers"
+          value={totals?.dealers ?? 0}
+          hint={`${totals?.activeDealers ?? 0} active`}
+          icon={FiUserCheck}
+          tone="violet"
+          to="/admin/dealers"
+        />
+        <StatCard
+          label="Trade-in value"
+          value={money(totals?.tradeInValue)}
+          icon={FiRefreshCw}
+          tone="green"
+          to="/admin/trade-ins"
+        />
+        <StatCard
+          label="Low stock"
+          value={totals?.lowStock ?? 0}
+          hint={`${totals?.outOfStock ?? 0} out of stock`}
+          icon={FiAlertTriangle}
+          tone={totals?.lowStock ? 'red' : 'slate'}
+          to="/admin/products?availability=low"
         />
       </div>
 
-      {/* ---------- The two kinds of order ---------- */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-        {/* Purchase orders */}
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                <FiShoppingCart className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="font-bold text-slate-900 text-sm">Purchase Orders</h2>
-                <p className="text-[11px] text-slate-400">New phones customers bought</p>
-              </div>
-            </div>
-            <Link to="/admin/orders" className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800">
-              Manage <FiArrowRight className="w-3.5 h-3.5" />
-            </Link>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mt-4">
+        <SectionCard
+          title="Revenue trend"
+          subtitle={`Paid, non-cancelled orders · ${activeRangeLabel}`}
+          className="xl:col-span-2"
+          bodyClassName="p-5"
+        >
+          <div id="revenue-panel">
+            {dashboardLoading && !dashboard ? (
+              <AdminPanelSkeleton className="h-64" />
+            ) : (
+              <RevenueChart data={dashboard?.revenueSeries || []} valueKey="revenue" labelKey={bucket} />
+            )}
           </div>
+        </SectionCard>
 
-          <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
-            <div className="p-4">
-              <p className="text-[11px] text-slate-500 font-medium">Total</p>
-              <p className="text-lg font-bold text-slate-900">{s.totalOrders}</p>
-            </div>
-            <div className="p-4">
-              <p className="text-[11px] text-slate-500 font-medium">In flight</p>
-              <p className="text-lg font-bold text-amber-600">{s.pendingOrders}</p>
-            </div>
-            <div className="p-4">
-              <p className="text-[11px] text-slate-500 font-medium">Cancelled</p>
-              <p className="text-lg font-bold text-red-500">{s.cancelledOrders}</p>
-            </div>
-          </div>
-
-          {s.recentOrders?.length > 0 ? (
-            <div className="divide-y divide-slate-50">
-              {s.recentOrders.map((order) => (
-                <div key={order._id} className="px-5 py-3 flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-800 truncate">{order.user?.name || 'Guest'}</p>
-                    <p className="text-[11px] text-slate-400 font-mono">
-                      #{order._id.slice(-8)} · {new Date(order.createdAt).toLocaleDateString('en-IN')}
-                    </p>
-                  </div>
-                  {order.tradeInValue > 0 && (
-                    <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
-                      -{shortMoney(order.tradeInValue)} old phone
-                    </span>
-                  )}
-                  <p className="text-sm font-bold text-slate-900 shrink-0">{money(order.totalPrice)}</p>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize shrink-0 ${ORDER_BADGE[order.orderStatus] || 'bg-slate-100 text-slate-600'}`}>
-                    {order.orderStatus}
-                  </span>
-                </div>
-              ))}
-            </div>
+        <SectionCard title="This period" subtitle="Movement inside the selected range" bodyClassName="p-5">
+          {dashboardLoading && !dashboard ? (
+            <AdminPanelSkeleton className="h-64" />
           ) : (
-            <p className="px-5 py-8 text-center text-sm text-slate-400">No purchase orders yet.</p>
-          )}
-        </section>
-
-        {/* Sell orders */}
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-violet-50 text-violet-600 flex items-center justify-center">
-                <FiRepeat className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="font-bold text-slate-900 text-sm">Sell Orders</h2>
-                <p className="text-[11px] text-slate-400">Old phones customers sold us</p>
-              </div>
-            </div>
-            <Link to="/admin/exchange" className="inline-flex items-center gap-1 text-xs font-semibold text-violet-600 hover:text-violet-800">
-              Manage <FiArrowRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-3 divide-x divide-slate-100 border-b border-slate-100">
-            <div className="p-4">
-              <p className="text-[11px] text-slate-500 font-medium">Total</p>
-              <p className="text-lg font-bold text-slate-900">{s.totalSellOrders}</p>
-            </div>
-            <div className="p-4">
-              <p className="text-[11px] text-slate-500 font-medium">Needs value</p>
-              <p className="text-lg font-bold text-amber-600">{s.sellPending}</p>
-            </div>
-            <div className="p-4">
-              <p className="text-[11px] text-slate-500 font-medium">Approved</p>
-              <p className="text-lg font-bold text-violet-600">{s.sellApproved + s.sellCompleted}</p>
-            </div>
-          </div>
-
-          {s.recentTradeIns?.length > 0 ? (
-            <div className="divide-y divide-slate-50">
-              {s.recentTradeIns.map((req) => (
-                <div key={req._id} className="px-5 py-3 flex items-center gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-slate-800 truncate">
-                      {req.brand} {req.model}
-                    </p>
-                    <p className="text-[11px] text-slate-400 truncate">
-                      {req.user?.name} · {new Date(req.createdAt).toLocaleDateString('en-IN')}
-                    </p>
-                  </div>
-                  <p className="text-sm font-bold text-slate-900 shrink-0">
-                    {req.exchangeValue > 0 ? `-${money(req.exchangeValue)}` : money(req.expectedPrice)}
-                  </p>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full capitalize shrink-0 ${SELL_BADGE[req.status] || 'bg-slate-100 text-slate-600'}`}>
-                    {req.status}
-                  </span>
-                </div>
+            <ul className="space-y-3">
+              {[
+                { label: 'New orders', value: pluralise(totals?.ordersInRange ?? 0, 'order'), to: '/admin/orders' },
+                { label: 'New customers', value: pluralise(totals?.newUsersInRange ?? 0, 'sign-up'), to: '/admin/users' },
+                { label: 'In flight', value: pluralise(dashboard?.inFlight ?? 0, 'order'), to: '/admin/orders?status=processing' },
+                { label: 'Delivered', value: pluralise(dashboard?.completed ?? 0, 'order'), to: '/admin/orders?status=delivered' },
+                { label: 'Trade-in requests', value: pluralise(totals?.tradeIns ?? 0, 'request'), to: '/admin/trade-ins' },
+                { label: 'Awaiting a value', value: pluralise(totals?.pendingTradeIns ?? 0, 'request'), to: '/admin/trade-ins?status=pending' },
+                {
+                  label: 'Cancelled',
+                  value: `${pluralise(totals?.cancelledOrders ?? 0, 'order')} · ${money(totals?.cancelledOrderValue)}`,
+                  to: '/admin/orders?status=cancelled',
+                },
+                {
+                  label: 'Trade-in credit given',
+                  value: money(totals?.exchangeCredit),
+                  to: '/admin/trade-ins?status=completed',
+                },
+              ].map((row) => (
+                <li key={row.label} className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-slate-600">{row.label}</span>
+                  <Link to={row.to} className="text-sm font-bold text-slate-900 hover:text-indigo-600 text-right">
+                    {row.value}
+                  </Link>
+                </li>
               ))}
-            </div>
-          ) : (
-            <p className="px-5 py-8 text-center text-sm text-slate-400">No sell orders yet.</p>
+            </ul>
           )}
-        </section>
+        </SectionCard>
       </div>
 
-      {/* ---------- Revenue + catalogue ---------- */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-        {s.monthlyRevenue?.length > 0 && (
-          <section className="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-            <h2 className="font-bold text-slate-900 text-sm mb-4 flex items-center gap-2">
-              <FiTrendingUp className="w-4 h-4 text-indigo-600" /> Income — last 6 months
-            </h2>
-            <div className="flex items-end gap-3 h-40">
-              {s.monthlyRevenue.map((item) => {
-                const max = Math.max(...s.monthlyRevenue.map((m) => m.revenue), 1)
-                const heightPct = (item.revenue / max) * 100
-                return (
-                  <div key={`${item._id?.year}-${item._id?.month}`} className="flex-1 flex flex-col items-center gap-1.5">
-                    <span className="text-[11px] text-slate-600 font-semibold">{shortMoney(item.revenue)}</span>
-                    <div className="w-full bg-slate-100 rounded-t-lg" style={{ height: `${Math.max(heightPct, 4)}%` }}>
-                      <div className="w-full h-full bg-indigo-500 rounded-t-lg" />
-                    </div>
-                    <span className="text-[10px] text-slate-400">
-                      {item._id?.month}/{item._id?.year?.toString().slice(2)}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          </section>
-        )}
-
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
-          <h2 className="font-bold text-slate-900 text-sm">Shop at a glance</h2>
-          {[
-            { label: 'Add a new phone', icon: FiPlus, to: '/admin/add-phone' },
-            { label: 'All phones (edit / delete)', icon: FiList, to: '/admin/products' },
-            { label: 'Exchange eligible phones', icon: FiPackage, to: '/admin/products' },
-            { label: 'Registered customers', icon: FiUsers, to: '/admin/users' },
-            { label: 'Active dealers', icon: FiShoppingBag, to: '/admin/dealers' },
-          ].map(({ label, icon: Icon, to }) => (
-            <Link key={label} to={to}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40 transition-colors">
-              <Icon className="w-4 h-4 text-slate-400" />
-              <span className="text-sm text-slate-700 font-medium">{label}</span>
-              <FiArrowRight className="w-3.5 h-3.5 ml-auto text-slate-300" />
-            </Link>
-          ))}
-        </section>
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 mt-4">
+        <StatusBreakdown title="Order status" byStatus={dashboard?.ordersByStatus} toneMap={ORDER_TONE} to="/admin/orders" />
+        <StatusBreakdown title="Payment status" byStatus={dashboard?.paymentsByStatus} toneMap={PAYMENT_TONE} to="/admin/payments" />
+        <StatusBreakdown title="Trade-in status" byStatus={dashboard?.tradeInsByStatus} toneMap={TRADE_IN_TONE} to="/admin/trade-ins" />
       </div>
-    </div>
+
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 mt-4">
+        <SectionCard
+          title="Recent orders"
+          action={<Link to="/admin/orders" className="text-xs font-semibold text-indigo-600 hover:underline">View all</Link>}
+          bodyClassName="py-2"
+        >
+          {dashboardLoading && !dashboard ? (
+            <div className="p-5"><AdminPanelSkeleton className="h-48" /></div>
+          ) : recentOrders.length === 0 ? (
+            <p className="px-5 py-8 text-sm text-slate-400 text-center">No orders in this period.</p>
+          ) : (
+            <ul className="divide-y divide-slate-50">
+              {recentOrders.map((order) => (
+                <ListRow
+                  key={order._id}
+                  to={`/admin/orders/${order._id}`}
+                  icon={FiShoppingCart}
+                  title={`#${shortId(order._id)} · ${money(order.totalPrice)}`}
+                  subtitle={`${order.user?.name || 'Guest'} · ${timeAgo(order.createdAt)}`}
+                  trailing={<AdminStatusBadge value={order.orderStatus} tone={ORDER_TONE[order.orderStatus]} />}
+                />
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Low stock"
+          subtitle="Three or fewer units left"
+          action={<Link to="/admin/products?availability=low" className="text-xs font-semibold text-indigo-600 hover:underline">View all</Link>}
+          bodyClassName="py-2"
+        >
+          {dashboardLoading && !dashboard ? (
+            <div className="p-5"><AdminPanelSkeleton className="h-48" /></div>
+          ) : lowStock.length === 0 ? (
+            <p className="px-5 py-8 text-sm text-slate-400 text-center">Every phone is comfortably stocked.</p>
+          ) : (
+            <ul className="divide-y divide-slate-50">
+              {lowStock.map((product) => (
+                <ListRow
+                  key={product._id}
+                  to={`/admin/products/${product._id}`}
+                  title={product.title}
+                  subtitle={`${money(product.price)} · ${pluralise(product.stock, 'unit')} left`}
+                  trailing={
+                    <span className="text-xs font-bold text-red-600">{product.stock}</span>
+                  }
+                />
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Best sellers"
+          subtitle="By units sold"
+          action={<Link to="/admin/products" className="text-xs font-semibold text-indigo-600 hover:underline">View all</Link>}
+          bodyClassName="py-2"
+        >
+          {dashboardLoading && !dashboard ? (
+            <div className="p-5"><AdminPanelSkeleton className="h-48" /></div>
+          ) : bestSellers.length === 0 ? (
+            <p className="px-5 py-8 text-sm text-slate-400 text-center">No sales recorded yet.</p>
+          ) : (
+            <ul className="divide-y divide-slate-50">
+              {bestSellers.map((product) => (
+                <ListRow
+                  key={product._id}
+                  to={`/admin/products/${product._id}`}
+                  title={product.title}
+                  subtitle={`${money(product.price)} · ${pluralise(product.sold, 'sold')}`}
+                  trailing={
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-600">
+                      {pluralise(product.sold, 'unit')}
+                      <FiArrowRight className="w-3 h-3" />
+                    </span>
+                  }
+                />
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Newest customers"
+          action={<Link to="/admin/users" className="text-xs font-semibold text-indigo-600 hover:underline">View all</Link>}
+          bodyClassName="py-2"
+        >
+          {dashboardLoading && !dashboard ? (
+            <div className="p-5"><AdminPanelSkeleton className="h-48" /></div>
+          ) : recentUsers.length === 0 ? (
+            <p className="px-5 py-8 text-sm text-slate-400 text-center">No sign-ups in this period.</p>
+          ) : (
+            <ul className="divide-y divide-slate-50">
+              {recentUsers.map((user) => (
+                <ListRow
+                  key={user._id}
+                  to={`/admin/users/${user._id}`}
+                  title={user.name}
+                  subtitle={user.email}
+                  trailing={<span className="text-[11px] text-slate-400">{timeAgo(user.createdAt)}</span>}
+                />
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Trade-ins awaiting review"
+          action={<Link to="/admin/trade-ins?status=pending" className="text-xs font-semibold text-indigo-600 hover:underline">View all</Link>}
+          bodyClassName="py-2"
+        >
+          {dashboardLoading && !dashboard ? (
+            <div className="p-5"><AdminPanelSkeleton className="h-48" /></div>
+          ) : recentTradeIns.length === 0 ? (
+            <p className="px-5 py-8 text-sm text-slate-400 text-center">No trade-in requests in this period.</p>
+          ) : (
+            <ul className="divide-y divide-slate-50">
+              {recentTradeIns.map((request) => (
+                <ListRow
+                  key={request._id}
+                  to={`/admin/trade-ins/${request._id}`}
+                  title={`${request.brand} ${request.model}`}
+                  subtitle={`${request.user?.name || 'Customer'} · ${timeAgo(request.createdAt)}`}
+                  trailing={
+                    <span className="flex flex-col items-end gap-1">
+                      <span className="text-xs font-bold text-slate-800">
+                        {request.dealerPrice ? money(request.dealerPrice) : 'Unquoted'}
+                      </span>
+                      <AdminStatusBadge value={request.status} tone={TRADE_IN_TONE[request.status]} />
+                    </span>
+                  }
+                />
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Newest dealers"
+          action={<Link to="/admin/dealers" className="text-xs font-semibold text-indigo-600 hover:underline">View all</Link>}
+          bodyClassName="py-2"
+        >
+          {dashboardLoading && !dashboard ? (
+            <div className="p-5"><AdminPanelSkeleton className="h-48" /></div>
+          ) : recentDealers.length === 0 ? (
+            <p className="px-5 py-8 text-sm text-slate-400 text-center">No dealer accounts yet.</p>
+          ) : (
+            <ul className="divide-y divide-slate-50">
+              {recentDealers.map((dealer) => (
+                <ListRow
+                  key={dealer._id}
+                  to={`/admin/dealers/${dealer._id}`}
+                  icon={null}
+                  title={dealer.dealerInfo?.shopName || dealer.name}
+                  subtitle={dealer.email}
+                  trailing={<AdminAvatar name={dealer.name} src={dealer.avatar} size="xs" />}
+                />
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      </div>
+
+      {dashboardError && dashboard && (
+        <p className="mt-4 text-xs text-slate-400 text-center">{errorMessage({ message: dashboardError })} — showing the last successful load.</p>
+      )}
+    </>
   )
 }

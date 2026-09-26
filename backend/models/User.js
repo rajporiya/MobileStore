@@ -25,6 +25,13 @@ const userSchema = new mongoose.Schema(
       enum: ['user', 'admin', 'dealer'],
       default: 'user',
     },
+    // Admins can suspend an account without deleting its order history.
+    // Documents created before this field existed have no value, which is
+    // treated as active, so existing accounts keep working untouched.
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
     dealerInfo: {
       shopName: { type: String, default: '' },
       description: { type: String, default: '' },

@@ -273,14 +273,59 @@ const cancelRequest = asyncHandler(async (req, res) => {
 // @desc  Get all trade-in requests (admin)
 // @route GET /api/tradein/admin
 const getAllRequests = asyncHandler(async (req, res) => {
-  const status = req.query.status || '';
-  const filter = status ? { status } : {};
+  const pageSize = Number(req.query.limit) || 20;
+  const page = Number(req.query.page) || 1;
 
-  const requests = await TradeInRequest.find(filter)
-    .populate(LIST_POPULATE)
-    .sort({ createdAt: -1 });
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
 
-  res.json({ success: true, data: requests });
+  if (req.query.search?.trim()) {
+    const safe = req.query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const users = await User.find({
+      $or: [
+        { name: { $regex: safe, $options: 'i' } },
+        { email: { $regex: safe, $options: 'i' } },
+        { phone: { $regex: safe, $options: 'i' } },
+      ],
+    })
+      .select('_id')
+      .lean();
+
+    filter.$or = [
+      { brand: { $regex: safe, $options: 'i' } },
+      { model: { $regex: safe, $options: 'i' } },
+      { dealerNote: { $regex: safe, $options: 'i' } },
+      ...(users.length ? [{ user: { $in: users.map((u) => u._id) } }] : []),
+    ];
+  }
+
+  if (req.query.dateFrom || req.query.dateTo) {
+    filter.createdAt = {
+      ...(req.query.dateFrom && { $gte: new Date(req.query.dateFrom) }),
+      ...(req.query.dateTo && { $lte: new Date(req.query.dateTo) }),
+    };
+  }
+
+  const [count, requests, byStatus] = await Promise.all([
+    TradeInRequest.countDocuments(filter),
+    TradeInRequest.find(filter)
+      .populate(LIST_POPULATE)
+      .sort({ createdAt: -1 })
+      .limit(pageSize)
+      .skip(pageSize * (page - 1)),
+    TradeInRequest.aggregate([{ $group: { _id: '$status', count: { $sum: 1 } } }]),
+  ]);
+
+  res.json({
+    success: true,
+    data: requests,
+    page,
+    pages: Math.ceil(count / pageSize),
+    total: count,
+    // Unfiltered counts, so the status tabs keep showing platform-wide totals
+    // while a filter is applied to the list.
+    byStatus: Object.fromEntries(byStatus.map((r) => [r._id, r.count])),
+  });
 });
 
 // @desc  Get dealer dashboard stats
@@ -323,10 +368,12 @@ module.exports = {
   getMyRequests,
   getAllRequests,
   getRequestById,
+  getDealerRequests,
+  getDealerStats,
   approveRequest,
   rejectRequest,
   completeRequest,
-  updateRequestStatus,
+  cancelRequest,
   deleteRequest,
   syncExchangeWithOrder,
 };

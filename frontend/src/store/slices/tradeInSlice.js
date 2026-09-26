@@ -53,10 +53,27 @@ export const fetchDealerStats = createAsyncThunk('tradeIn/fetchDealerStats', asy
   }
 })
 
-export const fetchAllTradeInRequests = createAsyncThunk('tradeIn/fetchAll', async (status = '', { rejectWithValue }) => {
+// Accepts a status string (as before) or a full filter object for the admin list.
+export const fetchAllTradeInRequests = createAsyncThunk('tradeIn/fetchAll', async (params = '', { rejectWithValue }) => {
+  const query = typeof params === 'string' ? { status: params } : params || {}
   try {
-    const { data } = await api.get('/tradein/admin', { params: { status: status || undefined } })
-    return data.data
+    const { data } = await api.get('/tradein/admin', {
+      params: {
+        status: query.status || undefined,
+        search: query.search || undefined,
+        dateFrom: query.dateFrom || undefined,
+        dateTo: query.dateTo || undefined,
+        page: query.page || 1,
+        limit: query.limit || 20,
+      },
+    })
+    return {
+      rows: data.data || [],
+      page: data.page || 1,
+      pages: data.pages || 1,
+      total: data.total || 0,
+      byStatus: data.byStatus || {},
+    }
   } catch (err) {
     return rejectWithValue(err.response?.data?.message || 'Failed to load requests')
   }
@@ -116,6 +133,7 @@ const initialState = {
   myRequests: [],
   dealerRequests: [],
   allRequests: [],
+  adminList: { page: 1, pages: 1, total: 0, byStatus: {} },
   dealerStats: { total: 0, pending: 0, approved: 0, rejected: 0, completed: 0 },
   loading: false,
   submitting: false,
@@ -208,10 +226,16 @@ const tradeInSlice = createSlice({
       })
 
       // Admin list
-      .addCase(fetchAllTradeInRequests.pending, (state) => { state.loading = true })
+      .addCase(fetchAllTradeInRequests.pending, (state) => { state.loading = true; state.error = null })
       .addCase(fetchAllTradeInRequests.fulfilled, (state, action) => {
         state.loading = false
-        state.allRequests = action.payload
+        state.allRequests = action.payload.rows
+        state.adminList = {
+          page: action.payload.page,
+          pages: action.payload.pages,
+          total: action.payload.total,
+          byStatus: action.payload.byStatus,
+        }
       })
       .addCase(fetchAllTradeInRequests.rejected, (state, action) => {
         state.loading = false

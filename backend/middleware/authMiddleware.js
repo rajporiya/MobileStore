@@ -17,18 +17,31 @@ const protect = asyncHandler(async (req, res, next) => {
     throw new Error('Not authorized, no token');
   }
 
+  let user;
+
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = await User.findById(decoded.id).select('-password');
-    if (!req.user) {
-      res.status(401);
-      throw new Error('Not authorized, user not found');
-    }
-    next();
+    user = await User.findById(decoded.id).select('-password');
   } catch (error) {
     res.status(401);
     throw new Error('Not authorized, token failed');
   }
+
+  if (!user) {
+    res.status(401);
+    throw new Error('Not authorized, user not found');
+  }
+
+  // Suspending an account has to take effect immediately, not on the next
+  // sign-in, so an already-issued token is rejected here too. Legacy documents
+  // without the field are treated as active.
+  if (user.isActive === false) {
+    res.status(403);
+    throw new Error('Your account has been suspended. Contact an administrator.');
+  }
+
+  req.user = user;
+  next();
 });
 
 const admin = (req, res, next) => {

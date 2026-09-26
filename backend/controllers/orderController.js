@@ -1,10 +1,14 @@
 const asyncHandler = require('express-async-handler');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const User = require('../models/User');
 const TradeInRequest = require('../models/TradeInRequest');
 const { syncExchangeWithOrder } = require('./tradeInController');
 const { sendOrderConfirmation } = require('../services/whatsappService');
 const { sendOrderSms } = require('../services/smsService');
+
+// User input goes straight into a $regex, so metacharacters are escaped first.
+const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // @desc  Create new order
 // @route POST /api/orders
@@ -207,11 +211,57 @@ const getAllOrders = asyncHandler(async (req, res) => {
   const pageSize = Number(req.query.limit) || 20;
   const page = Number(req.query.page) || 1;
 
+  const search = req.query.search?.trim();
   const statusFilter = req.query.status ? { orderStatus: req.query.status } : {};
-  const count = await Order.countDocuments(statusFilter);
+  const paymentFilter = req.query.paymentStatus
+    ? { paymentStatus: req.query.paymentStatus }
+    : {};
 
-  const orders = await Order.find(statusFilter)
-    .populate('user', 'name email')
+  const dateFilter =
+    req.query.dateFrom || req.query.dateTo
+      ? {
+          createdAt: {
+            ...(req.query.dateFrom && { $gte: new Date(req.query.dateFrom) }),
+            ...(req.query.dateTo && { $lte: new Date(req.query.dateTo) }),
+          },
+        }
+      : {};
+
+  // Free-text runs on the order id and the customer's own fields, so admins
+  // can paste either without knowing which column it lives in.
+  let userFilter = {};
+  if (search) {
+    // User input goes straight into a $regex, so metacharacters are escaped.
+    const safe = escapeRegex(search);
+
+    const users = await User.find({
+      $or: [
+        { name: { $regex: safe, $options: 'i' } },
+        { email: { $regex: safe, $options: 'i' } },
+        { phone: { $regex: safe, $options: 'i' } },
+      ],
+    })
+      .select('_id')
+      .lean();
+
+    const orderId = /^[a-f\d]{8,}$/i.test(search) ? search : null;
+
+    userFilter = {
+      $or: [
+        ...(orderId ? [{ _id: orderId }] : []),
+        ...(users.length ? [{ user: { $in: users.map((u) => u._id) } }] : []),
+        { 'orderItems.title': { $regex: safe, $options: 'i' } },
+        { 'shippingAddress.fullName': { $regex: safe, $options: 'i' } },
+        { 'shippingAddress.phone': { $regex: safe, $options: 'i' } },
+      ],
+    };
+  }
+
+  const filter = { ...statusFilter, ...paymentFilter, ...dateFilter, ...userFilter };
+  const count = await Order.countDocuments(filter);
+
+  const orders = await Order.find(filter)
+    .populate('user', 'name email phone')
     .sort({ createdAt: -1 })
     .limit(pageSize)
     .skip(pageSize * (page - 1));
@@ -222,6 +272,74 @@ const getAllOrders = asyncHandler(async (req, res) => {
     page,
     pages: Math.ceil(count / pageSize),
     total: count,
+  });
+});
+
+// @desc  Payment records (Admin). Payments live on the order, so this is the
+//        same collection read through a payment lens — no second source.
+// @route GET /api/orders/payments
+const getPayments = asyncHandler(async (req, res) => {
+  const pageSize = Number(req.query.limit) || 20;
+  const page = Number(req.query.page) || 1;
+
+  const filter = {};
+  if (req.query.status) filter.paymentStatus = req.query.status;
+  if (req.query.method) filter.paymentMethod = req.query.method;
+  if (req.query.dateFrom || req.query.dateTo) {
+    filter.createdAt = {
+      ...(req.query.dateFrom && { $gte: new Date(req.query.dateFrom) }),
+      ...(req.query.dateTo && { $lte: new Date(req.query.dateTo) }),
+    };
+  }
+
+  if (req.query.search?.trim()) {
+    const search = req.query.search.trim();
+    const safe = escapeRegex(search);
+    const users = await User.find({
+      $or: [
+        { name: { $regex: safe, $options: 'i' } },
+        { email: { $regex: safe, $options: 'i' } },
+      ],
+    })
+      .select('_id')
+      .lean();
+
+    filter.$or = [
+      { 'paymentResult.id': { $regex: safe, $options: 'i' } },
+      ...(users.length ? [{ user: { $in: users.map((u) => u._id) } }] : []),
+    ];
+    if (filter.$or.length === 0) delete filter.$or;
+  }
+
+  const [count, payments, byStatus, byMethod, totals] = await Promise.all([
+    Order.countDocuments(filter),
+    Order.find(filter)
+      .populate('user', 'name email')
+      .select(
+        'user paymentMethod paymentStatus paymentResult totalPrice itemsPrice ' +
+          'shippingPrice taxPrice tradeInValue orderStatus createdAt paidAt'
+      )
+      .sort({ createdAt: -1 })
+      .limit(pageSize)
+      .skip(pageSize * (page - 1))
+      .lean(),
+    Order.aggregate([{ $group: { _id: '$paymentStatus', count: { $sum: 1 } } }]),
+    Order.aggregate([{ $group: { _id: '$paymentMethod', count: { $sum: 1 } } }]),
+    Order.aggregate([
+      { $match: { paymentStatus: 'paid', orderStatus: { $ne: 'cancelled' } } },
+      { $group: { _id: null, total: { $sum: '$totalPrice' } } },
+    ]),
+  ]);
+
+  res.json({
+    success: true,
+    data: payments,
+    page,
+    pages: Math.ceil(count / pageSize),
+    total: count,
+    collected: totals[0]?.total || 0,
+    byStatus: Object.fromEntries(byStatus.map((r) => [r._id, r.count])),
+    byMethod: Object.fromEntries(byMethod.map((r) => [r._id || 'unknown', r.count])),
   });
 });
 
@@ -423,6 +541,7 @@ module.exports = {
   getOrderById,
   updateOrderToPaid,
   getAllOrders,
+  getPayments,
   updateOrderStatus,
   getOrderStats,
 };

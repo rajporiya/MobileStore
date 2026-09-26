@@ -1,376 +1,266 @@
-import { useEffect, useState } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
-import { Link } from 'react-router-dom'
-import { FiShoppingCart, FiSearch, FiXCircle, FiRotateCcw, FiRefreshCw, FiInbox, FiRepeat } from 'react-icons/fi'
-import toast from 'react-hot-toast'
-import { fetchAllOrders, updateOrderStatus, fetchOrderStats } from '../../store/slices/orderSlice'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { FiEye, FiShoppingCart } from 'react-icons/fi'
 
-const STATUS_BADGE = {
-  processing: 'bg-amber-100 text-amber-700',
-  confirmed: 'bg-sky-100 text-sky-700',
-  shipped: 'bg-indigo-100 text-indigo-700',
-  delivered: 'bg-emerald-100 text-emerald-700',
-  cancelled: 'bg-red-100 text-red-600',
-}
+import api from '../../services/api'
+import AdminPageHeader from '../../components/admin/ui/AdminPageHeader'
+import AdminTable from '../../components/admin/ui/AdminTable'
+import AdminPagination from '../../components/admin/ui/AdminPagination'
+import AdminFilterBar from '../../components/admin/ui/AdminFilterBar'
+import AdminSearchInput from '../../components/admin/ui/AdminSearchInput'
+import AdminSelect from '../../components/admin/ui/AdminSelect'
+import AdminDateRange from '../../components/admin/ui/AdminDateRange'
+import AdminStatusBadge from '../../components/admin/ui/AdminStatusBadge'
+import AdminAvatar from '../../components/admin/ui/AdminAvatar'
+import { SectionCard } from '../../components/admin/ui/AdminPanels'
+import {
+  money,
+  formatDate,
+  shortId,
+  errorMessage,
+  pluralise,
+  toDateInput,
+  ORDER_STATUSES,
+  PAYMENT_STATUSES,
+  ORDER_TONE,
+  PAYMENT_TONE,
+} from '../../utils/adminUtils'
 
-const TABS = [
-  { key: '', label: 'All' },
-  { key: 'processing', label: 'Processing' },
-  { key: 'confirmed', label: 'Confirmed' },
-  { key: 'shipped', label: 'Shipped' },
-  { key: 'delivered', label: 'Delivered' },
-  { key: 'cancelled', label: 'Cancelled' },
-]
-
-const NEXT_STATUS = ['processing', 'confirmed', 'shipped', 'delivered']
-const money = (n) => `₹${(n || 0).toLocaleString('en-IN')}`
-const formatDate = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+const PER_PAGE = 20
+const EMPTY_FILTERS = { search: '', status: '', paymentStatus: '', from: '', to: '' }
 
 export default function AdminOrders() {
-  const dispatch = useDispatch()
-  const { allOrders, total, pages, loading, adminStats } = useSelector((s) => s.orders)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [orders, setOrders] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [page, setPage] = useState(Number(searchParams.get('page')) || 1)
+  const [pages, setPages] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [stats, setStats] = useState(null)
+  const [statsLoading, setStatsLoading] = useState(true)
 
-  const [status, setStatus] = useState('')
-  const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [cancelling, setCancelling] = useState(null)
-  const [reason, setReason] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [filters, setFilters] = useState(() => ({
+    search: searchParams.get('search') || '',
+    status: searchParams.get('status') || '',
+    paymentStatus: searchParams.get('paymentStatus') || '',
+    from: toDateInput(searchParams.get('dateFrom')),
+    to: toDateInput(searchParams.get('dateTo')),
+  }))
 
-  const load = (p = page, s = status) => {
-    dispatch(fetchAllOrders({ page: p, limit: 10, ...(s ? { status: s } : {}) }))
-  }
+  const isFiltered = useMemo(
+    () => Object.entries(filters).some(([key, value]) => value !== EMPTY_FILTERS[key]),
+    [filters]
+  )
 
   useEffect(() => {
-    load(1, status)
-    dispatch(fetchOrderStats())
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status])
+    const next = {}
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value !== EMPTY_FILTERS[key]) next[key] = value
+    })
+    setSearchParams(next, { replace: true })
+  }, [filters, setSearchParams])
 
-  const changePage = (p) => {
-    setPage(p)
-    load(p, status)
-  }
-
-  const applySearch = (e) => {
-    e.preventDefault()
-    const q = search.trim().toLowerCase()
-    if (!q) return
-    const order = allOrders.find(
-      (o) =>
-        o.user?.name?.toLowerCase().includes(q) ||
-        o.user?.email?.toLowerCase().includes(q) ||
-        o._id.toLowerCase().includes(q) ||
-        o.orderItems?.some((i) => i.title.toLowerCase().includes(q))
-    )
-    if (!order) {
-      toast.error('No order on this page matches — try another status tab')
-      return
+  const fetchOrders = useCallback(async (targetPage) => {
+    setLoading(true)
+    setError(null)
+    try {
+      const { data } = await api.get('/orders', {
+        params: {
+          page: targetPage,
+          limit: PER_PAGE,
+          search: filters.search || undefined,
+          status: filters.status || undefined,
+          paymentStatus: filters.paymentStatus || undefined,
+          dateFrom: filters.from || undefined,
+          dateTo: filters.to || undefined,
+        },
+      })
+      setOrders(data.data || [])
+      setPages(data.pages || 1)
+      setTotal(data.total || 0)
+    } catch (err) {
+      setError(errorMessage(err, 'The order list could not be loaded.'))
+    } finally {
+      setLoading(false)
     }
-    setStatus('')
-    toast.success(`Matched ${order.user?.name || order._id.slice(-8)}`)
+  }, [filters])
+
+  useEffect(() => {
+    fetchOrders(page)
+  }, [fetchOrders, page])
+
+  useEffect(() => {
+    setStatsLoading(true)
+    api
+      .get('/orders/stats')
+      .then(({ data }) => setStats(data.data || data))
+      .catch(() => setStats(null))
+      .finally(() => setStatsLoading(false))
+  }, [])
+
+  const setFilter = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }))
+    setPage(1)
   }
 
-  const confirmCancel = async () => {
-    setBusy(true)
-    const result = await dispatch(
-      updateOrderStatus({ id: cancelling._id, orderStatus: 'cancelled', reason: reason.trim() })
-    )
-    setBusy(false)
-    if (updateOrderStatus.fulfilled.match(result)) {
-      setCancelling(null)
-      setReason('')
-      load()
-      dispatch(fetchOrderStats())
-    }
-  }
+  // The stats endpoint returns the per-status counts as an array of rows.
+  const statusCount = (status) => stats?.ordersByStatus?.find((row) => row._id === status)?.count ?? 0
 
-  const restore = async (order) => {
-    const result = await dispatch(
-      updateOrderStatus({ id: order._id, orderStatus: 'processing', wasCancelled: true })
-    )
-    if (updateOrderStatus.fulfilled.match(result)) {
-      load()
-      dispatch(fetchOrderStats())
-    }
-  }
+  const columns = [
+    { key: 'order', label: 'Order' },
+    { key: 'customer', label: 'Customer' },
+    { key: 'items', label: 'Items' },
+    { key: 'total', label: 'Total' },
+    { key: 'payment', label: 'Payment' },
+    { key: 'status', label: 'Status' },
+    { key: 'date', label: 'Placed' },
+    { key: 'actions', label: '', className: 'w-12' },
+  ]
 
   return (
-    <div className="space-y-5">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
-            <FiShoppingCart className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold text-slate-900">Purchase Orders</h1>
-            <p className="text-xs text-slate-500 mt-0.5">
-              New phones customers bought. Old phones they traded in are under{' '}
-              <Link to="/admin/exchange" className="text-violet-600 font-semibold hover:underline">Sell Orders</Link>.
+    <>
+      <AdminPageHeader
+        title="Orders"
+        description={loading ? 'Loading orders…' : `${pluralise(total, 'order')} match the current view`}
+        icon={FiShoppingCart}
+        actions={
+          <Link to="/admin/payments" className="btn-secondary !px-4 !py-2 text-sm inline-flex items-center gap-2">
+            View payments
+          </Link>
+        }
+      />
+
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
+        {[
+          { label: 'Revenue', value: stats ? money(stats.totalRevenue) : '—' },
+          { label: 'Orders', value: stats ? stats.totalOrders : '—' },
+          { label: 'Awaiting action', value: stats ? stats.pendingOrders : '—' },
+          { label: 'Delivered', value: stats ? statusCount('delivered') : '—' },
+        ].map((stat) => (
+          <SectionCard key={stat.label} bodyClassName="px-4 py-3.5">
+            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{stat.label}</p>
+            <p className="text-xl font-bold text-slate-900 mt-1">
+              {statsLoading && !stats ? <span className="inline-block h-5 w-16 bg-slate-100 rounded animate-pulse" /> : stat.value}
             </p>
-          </div>
-        </div>
-        <button onClick={() => { load(); dispatch(fetchOrderStats()) }} className="inline-flex items-center gap-2 text-sm font-semibold text-slate-600 hover:text-indigo-600 px-3 py-2 rounded-xl border border-slate-200 hover:border-indigo-300 transition-colors">
-          <FiRefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
-        </button>
+          </SectionCard>
+        ))}
       </div>
 
-      {/* Money strip */}
-      {adminStats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {[
-            { label: 'Total Income', value: money(adminStats.totalIncome), tone: 'text-emerald-600' },
-            { label: 'Orders', value: adminStats.totalOrders, tone: 'text-slate-900' },
-            { label: 'In Flight', value: adminStats.pendingOrders, tone: 'text-amber-600' },
-            { label: 'Cancelled Value', value: money(adminStats.cancelledOrderValue), tone: 'text-red-500' },
-          ].map(({ label, value, tone }) => (
-            <div key={label} className="bg-white rounded-xl border border-slate-200 px-4 py-3">
-              <p className="text-[11px] font-semibold text-slate-500">{label}</p>
-              <p className={`text-lg font-bold ${tone}`}>{value}</p>
-            </div>
-          ))}
-        </div>
-      )}
+      <AdminFilterBar isFiltered={isFiltered} resultCount={total} onReset={() => { setFilters(EMPTY_FILTERS); setPage(1) }}>
+        <AdminSearchInput
+          value={filters.search}
+          onChange={(value) => setFilter('search', value)}
+          placeholder="Order id, customer, phone or item"
+          className="grow"
+        />
+        <AdminSelect
+          label="Order status"
+          value={filters.status}
+          onChange={(value) => setFilter('status', value)}
+          allLabel="All statuses"
+          options={ORDER_STATUSES}
+          className="w-full sm:w-44"
+        />
+        <AdminSelect
+          label="Payment status"
+          value={filters.paymentStatus}
+          onChange={(value) => setFilter('paymentStatus', value)}
+          allLabel="All payments"
+          options={PAYMENT_STATUSES}
+          className="w-full sm:w-44"
+        />
+        <AdminDateRange
+          label="Placed between"
+          from={filters.from}
+          to={filters.to}
+          onChange={({ from, to }) => {
+            setFilters((prev) => ({ ...prev, from, to }))
+            setPage(1)
+          }}
+          className="w-full sm:w-72"
+        />
+      </AdminFilterBar>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex gap-1.5 overflow-x-auto">
-          {TABS.map(({ key, label }) => {
-            const count =
-              key === '' ? adminStats?.totalOrders : adminStats?.ordersByStatus?.find((o) => o._id === key)?.count
-            return (
-              <button
-                key={key}
-                onClick={() => { setStatus(key); setPage(1) }}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-colors ${
-                  status === key
-                    ? key === 'cancelled' ? 'bg-red-600 text-white' : 'bg-slate-900 text-white'
-                    : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-400'
-                }`}
-              >
-                {label}
-                {count !== undefined && <span className="ml-1.5 opacity-70">{count}</span>}
-              </button>
-            )
-          })}
-        </div>
-
-        <form onSubmit={applySearch} className="ml-auto flex items-center gap-2">
-          <div className="relative">
-            <FiSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Name, email, order id, phone…"
-              className="w-56 pl-9 pr-3 py-2 text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 bg-white"
-            />
-          </div>
-          <button type="submit" className="px-3 py-2 text-sm font-semibold text-white bg-slate-900 rounded-xl hover:bg-slate-700 transition-colors">
-            Find
-          </button>
-        </form>
-      </div>
-
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                {['Order', 'Customer', 'Date', 'Items', 'Old Phone Credit', 'Total', 'Payment', 'Status', 'Action'].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 text-[11px] font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                <tr><td colSpan={9} className="px-4 py-10 text-center text-slate-400">Loading...</td></tr>
-              ) : allOrders.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center">
-                    <FiInbox className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                    <p className="text-slate-400 text-sm">No purchase orders{status ? ` with status "${status}"` : ''}.</p>
-                  </td>
-                </tr>
-              ) : allOrders.map((order) => {
-                const isCancelled = order.orderStatus === 'cancelled'
-                return (
-                  <tr key={order._id} className={`hover:bg-slate-50 align-top ${isCancelled ? 'bg-red-50/30' : ''}`}>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-600 whitespace-nowrap">
-                      #{order._id.slice(-8)}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-slate-800 whitespace-nowrap">{order.user?.name || 'Guest'}</p>
-                      <p className="text-[11px] text-slate-400 truncate max-w-[160px]">{order.user?.email}</p>
-                    </td>
-
-                    <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{formatDate(order.createdAt)}</td>
-
-                    <td className="px-4 py-3">
-                      <p className="text-xs font-semibold text-slate-700">{order.orderItems?.length} item(s)</p>
-                      <p className="text-[11px] text-slate-400 truncate max-w-[150px]">
-                        {order.orderItems?.map((i) => i.title).join(', ')}
-                      </p>
-                    </td>
-
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {order.tradeInValue > 0 ? (
-                        <div>
-                          <p className="font-bold text-emerald-600">-{money(order.tradeInValue)}</p>
-                          <p className="text-[11px] text-slate-500">{order.tradeIn?.brand} {order.tradeIn?.model}</p>
-                        </div>
-                      ) : order.tradeIn?.request ? (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
-                          <FiRepeat className="w-3 h-3" /> awaiting value
-                        </span>
-                      ) : (
-                        <span className="text-slate-300">—</span>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      <p className={`font-bold ${isCancelled ? 'text-red-500 line-through' : 'text-slate-900'}`}>
-                        {money(order.totalPrice)}
-                      </p>
-                      {isCancelled && order.cancelReason && (
-                        <p className="text-[11px] text-slate-400 italic max-w-[140px] truncate" title={order.cancelReason}>
-                          {order.cancelReason}
-                        </p>
-                      )}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full capitalize ${
-                        order.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700'
-                          : order.paymentStatus === 'refunded' ? 'bg-slate-200 text-slate-600'
-                            : order.paymentStatus === 'failed' ? 'bg-red-100 text-red-600'
-                              : 'bg-amber-100 text-amber-700'
-                      }`}>
-                        {order.paymentStatus}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <span className={`text-[11px] font-bold px-2 py-1 rounded-full capitalize whitespace-nowrap ${STATUS_BADGE[order.orderStatus] || 'bg-slate-100 text-slate-600'}`}>
-                        {order.orderStatus}
-                      </span>
-                    </td>
-
-                    <td className="px-4 py-3">
-                      {isCancelled ? (
-                        <button
-                          onClick={() => restore(order)}
-                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 px-2.5 py-1.5 rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors"
-                        >
-                          <FiRotateCcw className="w-3.5 h-3.5" /> Restore
-                        </button>
-                      ) : (
-                        <div className="flex items-center gap-1.5">
-                          <select
-                            value={order.orderStatus}
-                            onChange={(e) => dispatch(updateOrderStatus({ id: order._id, orderStatus: e.target.value, wasCancelled: false }))}
-                            className="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/30 capitalize"
-                          >
-                            {NEXT_STATUS.map((s) => (
-                              <option key={s} value={s} className="capitalize">{s}</option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => { setCancelling(order); setReason('') }}
-                            title="Cancel order"
-                            className="p-2 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-                          >
-                            <FiXCircle className="w-4 h-4" />
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-
-        {pages > 1 && (
-          <div className="px-4 py-3 border-t border-slate-200 flex items-center gap-2 justify-between">
-            <p className="text-xs text-slate-500">{total} orders</p>
-            <div className="flex gap-1.5">
-              {Array.from({ length: pages }, (_, i) => i + 1).map((p) => (
-                <button key={p} onClick={() => changePage(p)}
-                  className={`w-8 h-8 rounded-lg text-xs font-semibold ${p === page ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                  {p}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Cancel confirmation */}
-      {cancelling && (
-        <div className="fixed inset-0 bg-slate-900/60 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-red-50 text-red-500 flex items-center justify-center">
-                <FiXCircle className="w-4 h-4" />
-              </div>
-              <div>
-                <h2 className="font-bold text-slate-900 text-sm">Cancel this order?</h2>
-                <p className="text-[11px] text-slate-500 font-mono">#{cancelling._id.slice(-8)}</p>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div className="bg-slate-50 rounded-xl p-3 text-xs text-slate-600 space-y-1">
-                <p><span className="text-slate-400">Customer:</span> <strong className="text-slate-800">{cancelling.user?.name}</strong></p>
-                <p><span className="text-slate-400">Order value:</span> <strong className="text-slate-800">{money(cancelling.totalPrice)}</strong></p>
-                {cancelling.tradeInValue > 0 && (
-                  <p>
-                    <span className="text-slate-400">Exchange credit:</span>{' '}
-                    <strong className="text-emerald-600">-{money(cancelling.tradeInValue)}</strong>{' '}
-                    <span className="text-slate-400">goes back to the customer's old phone</span>
-                  </p>
+      <AdminTable
+        columns={columns}
+        loading={loading}
+        error={error}
+        isEmpty={orders.length === 0}
+        onRetry={() => fetchOrders(page)}
+        emptyIcon={FiShoppingCart}
+        emptyTitle={isFiltered ? 'No order matches these filters' : 'No orders yet'}
+        emptyDescription={isFiltered ? 'Try clearing the status or payment filter.' : 'Orders will appear here as customers check out.'}
+        emptyAction={
+          isFiltered && (
+            <button onClick={() => { setFilters(EMPTY_FILTERS); setPage(1) }} className="btn-secondary !px-4 !py-2 text-sm">
+              Reset filters
+            </button>
+          )
+        }
+        footer={<AdminPagination page={page} pages={pages} total={total} onChange={setPage} itemLabel="orders" />}
+      >
+        {(keyOf) =>
+          orders.map((order) => (
+            <tr key={keyOf(order)} className="hover:bg-slate-50">
+              <td className="px-4 py-3 whitespace-nowrap">
+                <Link to={`/admin/orders/${order._id}`} className="text-sm font-bold text-slate-800 hover:text-indigo-600">
+                  #{shortId(order._id)}
+                </Link>
+                {order.tradeInValue > 0 && (
+                  <p className="text-[11px] text-violet-600 font-semibold">Trade-in −{money(order.tradeInValue)}</p>
                 )}
-              </div>
+              </td>
 
-              <ul className="text-xs text-slate-600 space-y-1 list-disc pl-4">
-                <li>Stock for every item goes back on sale</li>
-                <li>Any old phone handed in is released for reuse</li>
-                <li>Counted under "Cancelled Order Value", never as income</li>
-                <li>You can restore the order later if this was a mistake</li>
-              </ul>
+              <td className="px-4 py-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <AdminAvatar name={order.user?.name} size="xs" />
+                  <div className="min-w-0">
+                    <Link to={`/admin/users/${order.user?._id}`} className="block text-sm font-semibold text-slate-700 hover:text-indigo-600 truncate max-w-[160px]">
+                      {order.user?.name || 'Unknown'}
+                    </Link>
+                    <p className="text-[11px] text-slate-500 truncate max-w-[160px]">{order.user?.email}</p>
+                  </div>
+                </div>
+              </td>
 
-              <div>
-                <label className="block text-xs font-semibold text-slate-600 mb-1">Reason (optional)</label>
-                <input
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="e.g. customer changed their mind"
-                  className="w-full text-sm px-3 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-red-500/30 focus:border-red-400"
+              <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
+                {pluralise(order.orderItems?.reduce((sum, item) => sum + item.quantity, 0) || 0, 'item')}
+              </td>
+
+              <td className="px-4 py-3 text-sm font-bold text-slate-900 whitespace-nowrap">{money(order.totalPrice)}</td>
+
+              <td className="px-4 py-3 whitespace-nowrap">
+                <AdminStatusBadge
+                  value={order.paymentStatus}
+                  tone={PAYMENT_TONE[order.paymentStatus]}
+                  label={order.paymentStatus}
                 />
-              </div>
+              </td>
 
-              <div className="flex gap-3">
-                <button
-                  onClick={confirmCancel}
-                  disabled={busy}
-                  className="flex-1 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold hover:bg-red-700 transition-colors disabled:opacity-50"
+              <td className="px-4 py-3">
+                <AdminStatusBadge value={order.orderStatus} tone={ORDER_TONE[order.orderStatus]} />
+              </td>
+
+              <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDate(order.createdAt)}</td>
+
+              <td className="px-4 py-3">
+                <Link
+                  to={`/admin/orders/${order._id}`}
+                  title="View order"
+                  className="inline-flex p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
                 >
-                  {busy ? 'Cancelling...' : 'Yes, cancel order'}
-                </button>
-                <button
-                  onClick={() => setCancelling(null)}
-                  className="px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
-                >
-                  Keep
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+                  <FiEye className="w-4 h-4" />
+                </Link>
+              </td>
+            </tr>
+          ))
+        }
+      </AdminTable>
+
+      <p className="mt-3 text-xs text-slate-400 text-center">
+        Status changes made on an order screen also release or re-take stock automatically.
+      </p>
+    </>
   )
 }

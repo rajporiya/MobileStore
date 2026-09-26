@@ -15,12 +15,18 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Handle 401 globally
+// Handle an invalid or suspended session globally. The token is dropped so the
+// protected routes send the visitor back to sign in instead of looping on 401s.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status
+    const suspended =
+      status === 403 && /suspended/i.test(error.response?.data?.message || '')
+
+    if (status === 401 || suspended) {
       localStorage.removeItem('userInfo')
+      window.dispatchEvent(new CustomEvent('voltcart:session-ended', { detail: { suspended } }))
     }
     return Promise.reject(error)
   }
