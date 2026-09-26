@@ -13,6 +13,7 @@ function isConfigured() {
   );
 }
 
+// SMS confirmation sent after a successfully placed order.
 async function sendOrderSms(order) {
   if (!isConfigured()) return { skipped: true, reason: 'SMS is not configured' };
 
