@@ -1,6 +1,40 @@
 const asyncHandler = require('express-async-handler');
 const Product = require('../models/Product');
 
+const uploadedImages = (files) =>
+  (files || []).map((file) => ({
+    url: `/uploads/${file.filename}`,
+    public_id: file.filename,
+  }));
+
+// Accepts a JSON array of strings, a JSON array of {url} objects, or a
+// comma-separated string of URLs.
+const parseImages = (raw) => {
+  if (!raw) return [];
+  let value = raw;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+    value = trimmed.startsWith('[') ? JSON.parse(trimmed) : trimmed.split(',');
+  }
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((img) => (typeof img === 'string' ? img.trim() : img?.url))
+    .filter((url) => typeof url === 'string' && url)
+    .map((url) => ({ url, public_id: '' }));
+};
+
+const parseSpecifications = (raw) => {
+  if (!raw) return [];
+  const value = typeof raw === 'string' ? JSON.parse(raw) : raw;
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((spec) => ({ key: spec?.key || spec?.name || '', value: spec?.value || '' }))
+    .filter((spec) => spec.key);
+};
+
+const toBool = (value) => value === true || value === 'true';
+
 // @desc  Get all products with filters, search, pagination
 // @route GET /api/products
 const getProducts = asyncHandler(async (req, res) => {
@@ -93,32 +127,18 @@ const createProduct = asyncHandler(async (req, res) => {
     specifications, stock, isFeatured, discount, tags,
   } = req.body;
 
-  let images = [];
-  if (req.files && req.files.length > 0) {
-    images = req.files.map((file) => ({
-      url: `/uploads/${file.filename}`,
-      public_id: file.filename,
-    }));
-  } else if (req.body.images) {
-    // Support for base64 or external URLs passed as JSON
-    const rawImages = typeof req.body.images === 'string'
-      ? JSON.parse(req.body.images)
-      : req.body.images;
-    images = Array.isArray(rawImages)
-      ? rawImages.map((img) =>
-          typeof img === 'string' ? { url: img, public_id: '' } : img
-        )
-      : [];
-  }
+  // Uploaded files win; otherwise fall back to whatever URLs were supplied.
+  const images = req.files && req.files.length > 0
+    ? uploadedImages(req.files)
+    : parseImages(req.body.imageUrls || req.body.images);
 
   const product = await Product.create({
     title, brand, price, originalPrice, description, category,
     images,
-    specifications: specifications ? (
-      typeof specifications === 'string' ? JSON.parse(specifications) : specifications
-    ) : [],
+    specifications: parseSpecifications(specifications),
     stock: stock || 0,
-    isFeatured: isFeatured === 'true' || isFeatured === true,
+    isFeatured: toBool(isFeatured),
+    exchangeEnabled: toBool(req.body.exchangeEnabled),
     discount: discount || 0,
     tags: tags || [],
   });
@@ -145,24 +165,51 @@ const updateProduct = asyncHandler(async (req, res) => {
     if (req.body[field] !== undefined) product[field] = req.body[field];
   });
 
+  if (req.body.exchangeEnabled !== undefined) {
+    product.exchangeEnabled = toBool(req.body.exchangeEnabled);
+  }
+
   if (req.body.specifications) {
-    product.specifications =
-      typeof req.body.specifications === 'string'
-        ? JSON.parse(req.body.specifications)
-        : req.body.specifications;
+    product.specifications = parseSpecifications(req.body.specifications);
+  }
+
+  // Explicitly supplied URLs replace the gallery; uploaded files append to it.
+  if (req.body.imageUrls !== undefined || req.body.images !== undefined) {
+    product.images = parseImages(req.body.imageUrls || req.body.images);
   }
 
   if (req.files && req.files.length > 0) {
-    const newImages = req.files.map((file) => ({
-      url: `/uploads/${file.filename}`,
-      public_id: file.filename,
-    }));
-    product.images = [...product.images, ...newImages];
+    product.images = [...product.images, ...uploadedImages(req.files)];
   }
 
   const updated = await product.save();
   const populated = await updated.populate('category', 'name slug');
   res.json({ success: true, data: populated });
+});
+
+// @desc  Turn exchange on or off for a phone (admin)
+// @route PUT /api/products/:id/exchange
+const toggleProductExchange = asyncHandler(async (req, res) => {
+  const product = await Product.findById(req.params.id);
+
+  if (!product) {
+    res.status(404);
+    throw new Error('Product not found');
+  }
+
+  product.exchangeEnabled =
+    req.body.exchangeEnabled !== undefined
+      ? toBool(req.body.exchangeEnabled)
+      : !product.exchangeEnabled;
+
+  const updated = await product.save();
+  res.json({
+    success: true,
+    message: updated.exchangeEnabled
+      ? 'Exchange enabled for this phone'
+      : 'Exchange disabled for this phone',
+    data: updated,
+  });
 });
 
 // @desc  Delete product
@@ -229,6 +276,7 @@ module.exports = {
   getProductById,
   createProduct,
   updateProduct,
+  toggleProductExchange,
   deleteProduct,
   createProductReview,
   getFeaturedProducts,

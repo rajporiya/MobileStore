@@ -18,6 +18,7 @@ const createOrder = asyncHandler(async (req, res) => {
   // Verify products exist and calculate prices
   let itemsPrice = 0;
   const verifiedItems = [];
+  let exchangeEligible = true;
 
   for (const item of orderItems) {
     const product = await Product.findById(item.product);
@@ -29,6 +30,7 @@ const createOrder = asyncHandler(async (req, res) => {
       res.status(400);
       throw new Error(`Insufficient stock for ${product.title}`);
     }
+    if (!product.exchangeEnabled) exchangeEligible = false;
     verifiedItems.push({
       product: product._id,
       title: product.title,
@@ -45,6 +47,11 @@ const createOrder = asyncHandler(async (req, res) => {
   let tradeInValue = 0;
 
   if (tradeInRequestId) {
+    if (!exchangeEligible) {
+      res.status(400);
+      throw new Error('Exchange is not available on every phone in this cart');
+    }
+
     const request = await TradeInRequest.findById(tradeInRequestId);
 
     if (!request || request.user.toString() !== req.user._id.toString()) {

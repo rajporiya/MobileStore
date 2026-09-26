@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
-import { FiShoppingCart, FiHeart, FiStar, FiCheck } from 'react-icons/fi'
+import { FiShoppingCart, FiHeart, FiStar, FiCheck, FiRepeat } from 'react-icons/fi'
 import { addToCart } from '../../store/slices/cartSlice'
 import { toggleWishlist } from '../../store/slices/wishlistSlice'
 import { useState } from 'react'
@@ -52,6 +52,11 @@ export default function ProductCard({ product }) {
           <div className="absolute inset-0 bg-white/60 backdrop-blur-sm flex items-center justify-center">
             <span className="bg-slate-900 text-white font-semibold text-xs px-4 py-1.5 rounded-full shadow-lg">Out of Stock</span>
           </div>
+        )}
+        {product.exchangeEnabled && product.stock > 0 && (
+          <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 bg-emerald-500 text-white text-[11px] font-bold px-2.5 py-1 rounded-full shadow-md">
+            <FiRepeat className="w-3 h-3" /> Exchange
+          </span>
         )}
         <button
           onClick={handleWishlist}

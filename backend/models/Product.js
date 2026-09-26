@@ -70,6 +70,11 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    // Customers may pay for this phone using an old phone trade-in credit.
+    exchangeEnabled: {
+      type: Boolean,
+      default: false,
+    },
     discount: {
       type: Number,
       default: 0,

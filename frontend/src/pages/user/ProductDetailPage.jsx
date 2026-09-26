@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
-import { FiShoppingCart, FiHeart, FiStar, FiChevronLeft, FiMinus, FiPlus } from 'react-icons/fi'
+import { FiShoppingCart, FiHeart, FiStar, FiChevronLeft, FiMinus, FiPlus, FiRepeat } from 'react-icons/fi'
 import { fetchProductById, clearProduct } from '../../store/slices/productSlice'
 import { addToCart } from '../../store/slices/cartSlice'
 import { toggleWishlist, fetchWishlist } from '../../store/slices/wishlistSlice'
@@ -138,6 +138,25 @@ export default function ProductDetailPage() {
           <p className={`text-sm font-medium mb-4 ${product.stock > 0 ? 'text-green-600' : 'text-red-500'}`}>
             {product.stock > 0 ? `✓ In Stock (${product.stock} units)` : '✗ Out of Stock'}
           </p>
+
+          {/* Exchange eligibility */}
+          {product.exchangeEnabled ? (
+            <Link
+              to="/sell-mobile"
+              className="flex items-start gap-2.5 p-3.5 mb-5 rounded-xl bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+            >
+              <FiRepeat className="w-4 h-4 text-emerald-600 mt-0.5 shrink-0" />
+              <p className="text-sm text-emerald-800">
+                <strong>Exchange eligible.</strong> Sell your old phone and its value is deducted from
+                this phone when you check out.{' '}
+                <span className="underline font-medium">Get a quote</span>
+              </p>
+            </Link>
+          ) : (
+            <p className="flex items-center gap-2 text-sm text-stone-400 mb-5">
+              <FiRepeat className="w-4 h-4" /> Exchange not available for this phone
+            </p>
+          )}
 
           {/* Quantity selector */}
           {product.stock > 0 && (

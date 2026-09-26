@@ -55,7 +55,11 @@ export default function CheckoutPage() {
   const exchangeable = myRequests.filter(
     (r) => !r.linkedOrder && (r.status === 'approved' || r.status === 'pending')
   )
-  const selectedTradeIn = exchangeable.find((r) => r._id === tradeInId) || null
+  // Every phone in the cart must allow exchange, otherwise no old phone can be applied.
+  const cartAllowsExchange = cartItems.length > 0 && cartItems.every((item) => item.exchangeEnabled)
+  const selectedTradeIn = cartAllowsExchange
+    ? exchangeable.find((r) => r._id === tradeInId) || null
+    : null
   const exchangeValue = selectedTradeIn?.exchangeValue ?? 0
 
   const totalAmount = Math.max(0, cartTotal + shippingPrice + taxAmount - exchangeValue)
@@ -202,6 +206,15 @@ export default function CheckoutPage() {
                 <div className="bg-cream-50 rounded-xl p-6 text-center">
                   <p className="text-sm text-stone-600 mb-3">You have no old phone ready for exchange.</p>
                   <Link to="/sell-mobile" className="btn-secondary inline-block">Sell an Old Phone</Link>
+                </div>
+              ) : !cartAllowsExchange ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                  <p className="text-sm font-semibold text-amber-900 mb-1">Exchange is not available on this cart</p>
+                  <p className="text-sm text-amber-800">
+                    {cartItems.filter((i) => !i.exchangeEnabled).map((i) => i.title).join(', ')}{' '}
+                    {cartItems.filter((i) => !i.exchangeEnabled).length === 1 ? 'does' : 'do'} not allow exchange.
+                    Remove {cartItems.filter((i) => !i.exchangeEnabled).length === 1 ? 'it' : 'them'} to exchange your old phone.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3">
