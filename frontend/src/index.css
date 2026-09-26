@@ -9,36 +9,48 @@
   
   body {
     font-family: 'Inter', system-ui, sans-serif;
-    background-color: #fdf8f0;
-    color: #3d2b1f;
+    background-color: #f8fafc;
+    color: #1e293b;
   }
 
   ::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: #faf3e8;
+    background: #f1f5f9;
   }
   ::-webkit-scrollbar-thumb {
-    background: #c8956c;
+    background: #c7d2fe;
     border-radius: 3px;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
 @layer components {
   .btn-primary {
-    @apply bg-brown text-white px-5 py-2.5 rounded-xl font-semibold
-           hover:bg-brown-dark transition-all duration-200 active:scale-95 shadow-sm;
+    @apply bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-5 py-2.5 rounded-xl font-semibold
+           hover:from-indigo-700 hover:to-violet-700 transition-all duration-200 active:scale-95 shadow-md shadow-indigo-500/25;
   }
 
   .btn-secondary {
-    @apply bg-cream-200 text-brown-dark border border-brown-light px-5 py-2.5 rounded-xl font-semibold
-           hover:bg-cream-300 transition-all duration-200 active:scale-95;
+    @apply bg-white text-slate-700 border border-slate-200 px-5 py-2.5 rounded-xl font-semibold
+           hover:bg-slate-50 hover:border-indigo-300 hover:text-indigo-600 transition-all duration-200 active:scale-95;
   }
 
   .btn-outline {
-    @apply border-2 border-brown text-brown px-5 py-2.5 rounded-xl font-semibold
-           hover:bg-brown hover:text-white transition-all duration-200 active:scale-95;
+    @apply border-2 border-indigo-600 text-indigo-600 px-5 py-2.5 rounded-xl font-semibold
+           hover:bg-indigo-600 hover:text-white transition-all duration-200 active:scale-95;
   }
 
   .card {
@@ -46,17 +58,17 @@
   }
 
   .input {
-    @apply w-full border border-cream-300 rounded-xl px-4 py-2.5 text-sm
-           focus:outline-none focus:ring-2 focus:ring-brown-light focus:border-transparent
-           bg-cream-50 placeholder-stone-400 transition-all duration-200;
+    @apply w-full border border-slate-200 rounded-xl px-4 py-2.5 text-sm
+           focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent
+           bg-white placeholder-slate-400 transition-all duration-200;
   }
 
   .section-title {
-    @apply text-2xl md:text-3xl font-bold text-brown-dark text-center mb-2;
+    @apply text-2xl md:text-3xl font-bold text-slate-900 text-center mb-2;
   }
 
   .section-subtitle {
-    @apply text-stone-500 text-center mb-8 text-sm md:text-base;
+    @apply text-slate-500 text-center mb-8 text-sm md:text-base;
   }
 
   .badge {
@@ -64,22 +76,26 @@
   }
 
   .badge-green {
-    @apply badge bg-green-100 text-green-800;
+    @apply badge bg-emerald-100 text-emerald-700;
   }
 
   .badge-yellow {
-    @apply badge bg-yellow-100 text-yellow-800;
+    @apply badge bg-amber-100 text-amber-700;
   }
 
   .badge-red {
-    @apply badge bg-red-100 text-red-800;
+    @apply badge bg-red-100 text-red-700;
   }
 
   .badge-blue {
-    @apply badge bg-blue-100 text-blue-800;
+    @apply badge bg-blue-100 text-blue-700;
   }
 
   .badge-brown {
-    @apply badge bg-primary-100 text-primary-800;
+    @apply badge bg-indigo-100 text-indigo-700;
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-500 bg-clip-text text-transparent;
   }
 }

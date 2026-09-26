@@ -81,7 +81,7 @@ export default function ProductDetailPage() {
         <div>
           <div className="aspect-square bg-cream-100 rounded-2xl overflow-hidden mb-3 border border-cream-200">
             <img
-              src={product.images?.[selectedImage]?.url || 'https://placehold.co/600x600/faf3e8/8B5E3C?text=Phone'}
+              src={product.images?.[selectedImage]?.url || 'https://placehold.co/600x600/f1f5f9/4f46e5?text=Phone'}
               alt={product.title}
               className="w-full h-full object-cover"
             />

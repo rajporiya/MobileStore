@@ -28,11 +28,11 @@ export default function LoginPage() {
         <div className="card p-8">
           {/* Header */}
           <div className="text-center mb-8">
-            <div className="w-14 h-14 bg-brown rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <span className="text-white text-2xl font-bold">M</span>
+            <div className="w-14 h-14 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/30">
+              <span className="text-white text-2xl font-extrabold">V</span>
             </div>
             <h1 className="text-2xl font-bold text-brown-dark">Welcome Back</h1>
-            <p className="text-stone-500 text-sm mt-1">Sign in to your Mobile_Store account</p>
+            <p className="text-stone-500 text-sm mt-1">Sign in to your VoltCart account</p>
           </div>
 
           {error && (

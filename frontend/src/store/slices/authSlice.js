@@ -91,7 +91,7 @@ const authSlice = createSlice({
       .addCase(verifyRegistrationOtp.fulfilled, (state, action) => {
         state.loading = false
         state.userInfo = action.payload
-        toast.success(`Welcome to Mobile Store, ${action.payload.name}!`)
+        toast.success(`Welcome to VoltCart, ${action.payload.name}!`)
       })
       .addCase(verifyRegistrationOtp.rejected, (state, action) => {
         state.loading = false

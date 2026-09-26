@@ -30,10 +30,11 @@ app.use('/api/categories', require('./routes/categoryRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
 app.use('/api/payment', require('./routes/paymentRoutes'));
+app.use('/api/tradein', require('./routes/tradeInRoutes'));
 
 // Health check
 app.get('/api/health', (req, res) =>
-  res.json({ status: 'OK', message: 'Mobile Store API is running' })
+  res.json({ status: 'OK', message: 'VoltCart API is running' })
 );
 
 app.use(notFound);

@@ -22,11 +22,19 @@ import AdminCategories from './pages/admin/AdminCategories'
 import AdminOrders from './pages/admin/AdminOrders'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminLogin from './pages/admin/AdminLogin'
+import AdminDealers from './pages/admin/AdminDealers'
+
+// Sell & Dealer pages
+import SellMobilePage from './pages/user/SellMobilePage'
+import DealerLayout from './components/dealer/DealerLayout'
+import DealerDashboard from './pages/dealer/DealerDashboard'
+import DealerRequestsPage from './pages/dealer/DealerRequestsPage'
 
 // Components
 import UserLayout from './components/user/UserLayout'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import AdminRoute from './components/common/AdminRoute'
+import DealerRoute from './components/common/DealerRoute'
 import ScrollToTop from './components/common/ScrollToTop'
 
 import { loadUserFromStorage } from './store/slices/authSlice'
@@ -53,7 +61,14 @@ function App() {
           <Route path="register" element={<RegisterPage />} />
           <Route path="checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
           <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          <Route path="sell-mobile" element={<ProtectedRoute><SellMobilePage /></ProtectedRoute>} />
           <Route path="order-success/:id" element={<ProtectedRoute><OrderSuccessPage /></ProtectedRoute>} />
+        </Route>
+
+        {/* Dealer Routes */}
+        <Route path="/dealer" element={<DealerRoute><DealerLayout /></DealerRoute>}>
+          <Route index element={<DealerDashboard />} />
+          <Route path="requests" element={<DealerRequestsPage />} />
         </Route>
 
         {/* Admin Routes */}
@@ -64,6 +79,7 @@ function App() {
           <Route path="categories" element={<AdminCategories />} />
           <Route path="orders" element={<AdminOrders />} />
           <Route path="users" element={<AdminUsers />} />
+          <Route path="dealers" element={<AdminDealers />} />
         </Route>
       </Routes>
     </>

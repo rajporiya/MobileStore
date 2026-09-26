@@ -34,7 +34,7 @@ export default function CartPage() {
             <div key={item._id} className="card p-4 flex gap-4">
               <Link to={`/products/${item._id}`}>
                 <img
-                  src={item.images?.[0]?.url || 'https://placehold.co/100x100/faf3e8/8B5E3C?text=Phone'}
+                  src={item.images?.[0]?.url || 'https://placehold.co/100x100/f1f5f9/4f46e5?text=Phone'}
                   alt={item.title}
                   className="w-20 h-20 object-cover rounded-xl bg-cream-100"
                 />

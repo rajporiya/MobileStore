@@ -12,8 +12,8 @@ async function sendRegistrationOtp({ email, name, otp }) {
     body: JSON.stringify({
       from: process.env.EMAIL_FROM,
       to: [email],
-      subject: 'Verify your Mobile Store account',
-      html: `<p>Hi ${name},</p><p>Your Mobile Store verification code is:</p><h1 style="letter-spacing: 4px;">${otp}</h1><p>This code expires in 10 minutes. Do not share it with anyone.</p>`,
+      subject: 'Verify your VoltCart account',
+      html: `<p>Hi ${name},</p><p>Your VoltCart verification code is:</p><h1 style="letter-spacing: 4px;">${otp}</h1><p>This code expires in 10 minutes. Do not share it with anyone.</p>`,
     }),
   });
 

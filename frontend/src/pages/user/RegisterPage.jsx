@@ -44,7 +44,7 @@ export default function RegisterPage() {
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md"><div className="card p-8">
-        <div className="text-center mb-8"><div className="w-14 h-14 bg-brown rounded-2xl flex items-center justify-center mx-auto mb-4"><span className="text-white text-2xl font-bold">M</span></div><h1 className="text-2xl font-bold text-brown-dark">{otpSent ? 'Verify your email' : 'Create Account'}</h1><p className="text-stone-500 text-sm mt-1">{otpSent ? `We sent a code to ${form.email}` : 'Join Mobile Store today'}</p></div>
+        <div className="text-center mb-8"><div className="w-14 h-14 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-indigo-500/30"><span className="text-white text-2xl font-extrabold">V</span></div><h1 className="text-2xl font-bold text-brown-dark">{otpSent ? 'Verify your email' : 'Create Account'}</h1><p className="text-stone-500 text-sm mt-1">{otpSent ? `We sent a code to ${form.email}` : 'Join VoltCart today'}</p></div>
         {message && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl mb-4">{message}</div>}
         {!otpSent ? (
           <form onSubmit={requestOtp} className="space-y-4">

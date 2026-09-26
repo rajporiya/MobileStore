@@ -21,7 +21,7 @@ async function sendOrderSms(order) {
 
   const orderNumber = order._id.toString().slice(-8).toUpperCase();
   const total = Number(order.totalPrice).toLocaleString('en-IN');
-  const body = `Mobile Store: Hi ${order.shippingAddress.fullName}, your order #${orderNumber} for INR ${total} has been placed successfully.`;
+  const body = `VoltCart: Hi ${order.shippingAddress.fullName}, your order #${orderNumber} for INR ${total} has been placed successfully.`;
   const requestBody = new URLSearchParams({ To: to, Body: body });
 
   if (process.env.TWILIO_MESSAGING_SERVICE_SID) {

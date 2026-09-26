@@ -71,7 +71,7 @@ export default function CheckoutPage() {
             <button
               onClick={() => n < step && setStep(n)}
               className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold transition-all
-                ${step >= n ? 'bg-brown text-white' : 'bg-cream-200 text-stone-500'}`}
+                ${step >= n ? 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white' : 'bg-slate-200 text-slate-500'}`}
             >
               {step > n ? <FiCheckCircle className="w-3.5 h-3.5" /> : <span>{n}</span>}
               {label}

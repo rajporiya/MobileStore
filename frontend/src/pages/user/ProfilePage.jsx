@@ -51,7 +51,7 @@ export default function ProfilePage() {
         {/* Sidebar */}
         <div className="card p-5 md:col-span-1 h-fit sticky top-24">
           <div className="text-center mb-4">
-            <div className="w-16 h-16 bg-brown rounded-full flex items-center justify-center mx-auto mb-2">
+            <div className="w-16 h-16 bg-gradient-to-br from-indigo-600 to-violet-600 rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg shadow-indigo-500/30">
               <span className="text-white text-2xl font-bold">{userInfo?.name?.[0]?.toUpperCase()}</span>
             </div>
             <p className="font-semibold text-stone-800 text-sm">{userInfo?.name}</p>

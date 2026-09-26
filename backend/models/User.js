@@ -22,8 +22,14 @@ const userSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ['user', 'admin'],
+      enum: ['user', 'admin', 'dealer'],
       default: 'user',
+    },
+    dealerInfo: {
+      shopName: { type: String, default: '' },
+      description: { type: String, default: '' },
+      city: { type: String, default: '' },
+      isActive: { type: Boolean, default: true },
     },
     phone: {
       type: String,

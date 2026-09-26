@@ -1,7 +1,7 @@
 {
-  "name": "mobile-store-backend",
+  "name": "voltcart-backend",
   "version": "1.0.0",
-  "description": "Mobile Store eCommerce Backend API",
+  "description": "VoltCart eCommerce Backend API",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

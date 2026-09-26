@@ -40,4 +40,13 @@ const admin = (req, res, next) => {
   }
 };
 
-module.exports = { protect, admin };
+const dealer = (req, res, next) => {
+  if (req.user && req.user.role === 'dealer') {
+    next();
+  } else {
+    res.status(403);
+    throw new Error('Not authorized as dealer');
+  }
+};
+
+module.exports = { protect, admin, dealer };

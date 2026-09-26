@@ -125,6 +125,88 @@ const getWishlist = asyncHandler(async (req, res) => {
   res.json({ success: true, data: user.wishlist });
 });
 
+// @desc  Get all dealers (Admin)
+// @route GET /api/users/dealers
+const getAllDealers = asyncHandler(async (req, res) => {
+  const dealers = await User.find({ role: 'dealer' })
+    .select('-password')
+    .sort({ createdAt: -1 });
+
+  res.json({ success: true, data: dealers });
+});
+
+// @desc  Promote user to dealer (Admin)
+// @route POST /api/users/dealers
+const promoteToDealer = asyncHandler(async (req, res) => {
+  const { email, shopName, city } = req.body;
+
+  const user = await User.findOne({ email: email.toLowerCase() });
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found with this email');
+  }
+  if (user.role === 'admin') {
+    res.status(400);
+    throw new Error('Cannot change admin role');
+  }
+
+  user.role = 'dealer';
+  user.dealerInfo = {
+    shopName: shopName || '',
+    description: '',
+    city: city || '',
+    isActive: true,
+  };
+  await user.save();
+
+  const updated = await User.findById(user._id).select('-password');
+
+  res.json({ success: true, data: updated });
+});
+
+// @desc  Update dealer info (Admin)
+// @route PUT /api/users/dealers/:id
+const updateDealer = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+  if (user.role !== 'dealer') {
+    res.status(400);
+    throw new Error('User is not a dealer');
+  }
+
+  const { shopName, description, city, isActive } = req.body;
+  if (shopName !== undefined) user.dealerInfo.shopName = shopName;
+  if (description !== undefined) user.dealerInfo.description = description;
+  if (city !== undefined) user.dealerInfo.city = city;
+  if (isActive !== undefined) user.dealerInfo.isActive = isActive;
+
+  await user.save();
+
+  const updated = await User.findById(user._id).select('-password');
+  res.json({ success: true, data: updated });
+});
+
+// @desc  Demote dealer to user (Admin)
+// @route PUT /api/users/dealers/:id/demote
+const demoteDealer = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+  if (user.role !== 'dealer') {
+    res.status(400);
+    throw new Error('User is not a dealer');
+  }
+
+  user.role = 'user';
+  await user.save();
+  res.json({ success: true, message: 'User demoted to regular user' });
+});
+
 module.exports = {
   getAllUsers,
   getUserById,
@@ -132,4 +214,8 @@ module.exports = {
   getDashboardStats,
   addToWishlist,
   getWishlist,
+  getAllDealers,
+  promoteToDealer,
+  updateDealer,
+  demoteDealer,
 };
