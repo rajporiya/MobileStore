@@ -34,7 +34,9 @@ export default function Navbar() {
 
   const isActive = (to) => {
     if (to === '/') return location.pathname === '/'
-    if (to.includes('featured')) return location.pathname === '/products' && new URLSearchParams(location.search).get('featured') === 'true'
+    const params = new URLSearchParams(location.search)
+    if (to.includes('featured')) return location.pathname === '/products' && params.get('featured') === 'true'
+    if (to === '/products') return location.pathname === '/products' && params.get('featured') !== 'true'
     return location.pathname.startsWith(to.split('?')[0])
   }
 

@@ -84,6 +84,10 @@ export const ADMIN_LABEL = 'block text-[11px] font-semibold uppercase tracking-w
 export const ADMIN_TABLE_WRAPPER =
   'overflow-hidden rounded-xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]'
 
+// Per-cell type tokens, referenced by the composed row/heading constants below.
+export const ADMIN_TH = 'text-[11px] font-semibold uppercase tracking-wider text-slate-500'
+export const ADMIN_TABLE_CELL = 'text-[13px] text-slate-600'
+
 export const ADMIN_TABLE_HEAD = 'bg-slate-50/80 border-b border-slate-200'
 
 export const ADMIN_TABLE_ROW = 'border-b border-slate-100 last:border-0 transition-colors hover:bg-slate-50/70'
