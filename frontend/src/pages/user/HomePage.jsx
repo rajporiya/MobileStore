@@ -19,12 +19,18 @@ export default function HomePage() {
   const { featured, loading } = useSelector((s) => s.products)
   const { userInfo } = useSelector((s) => s.auth)
   const [categories, setCategories] = useState([])
+  const [latest, setLatest] = useState([])
+  const [latestLoading, setLatestLoading] = useState(true)
 
   useEffect(() => {
     dispatch(fetchFeaturedProducts())
     api.get('/categories')
       .then((res) => setCategories(res.data.data || []))
       .catch(() => setCategories([]))
+    api.get('/products', { params: { sort: 'newest', page: 1, limit: 8 } })
+      .then((res) => setLatest(res.data.data || []))
+      .catch(() => setLatest([]))
+      .finally(() => setLatestLoading(false))
   }, [dispatch])
 
   return (
@@ -145,6 +151,24 @@ export default function HomePage() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
           {loading ? [...Array(8)].map((_, i) => <ProductCardSkeleton key={i} />) : featured.slice(0, 8).map((product) => <ProductCard key={product._id} product={product} />)}
+        </div>
+      </section>
+
+      {/* Latest Phones — every phone an admin publishes shows up here first */}
+      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+        <div className="flex items-end justify-between mb-8 gap-4">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-900">New Arrivals</h2>
+            <p className="text-slate-500 text-sm mt-1">The latest phones added to the store</p>
+          </div>
+          <Link to="/products" className="btn-outline !py-2 !px-4 text-sm flex items-center gap-1.5 shrink-0">
+            View All <FiArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+          {latestLoading
+            ? [...Array(4)].map((_, i) => <ProductCardSkeleton key={i} />)
+            : latest.map((product) => <ProductCard key={product._id} product={product} />)}
         </div>
       </section>
 

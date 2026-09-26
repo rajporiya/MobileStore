@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
   FiShoppingCart, FiRepeat, FiDollarSign, FiTrendingUp, FiXCircle,
-  FiClock, FiUsers, FiShoppingBag, FiArrowRight, FiPackage
+  FiClock, FiUsers, FiShoppingBag, FiArrowRight, FiPackage, FiPlus, FiList
 } from 'react-icons/fi'
 import { fetchOrderStats } from '../../store/slices/orderSlice'
 
@@ -83,6 +83,12 @@ export default function AdminDashboard() {
             Purchase orders and sell orders are counted separately.
           </p>
         </div>
+        <Link
+          to="/admin/add-phone"
+          className="btn-primary flex items-center gap-2 shrink-0"
+        >
+          <FiPlus className="w-4 h-4" /> Add Phone
+        </Link>
       </div>
 
       {/* ---------- Money ---------- */}
@@ -267,6 +273,8 @@ export default function AdminDashboard() {
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-3">
           <h2 className="font-bold text-slate-900 text-sm">Shop at a glance</h2>
           {[
+            { label: 'Add a new phone', icon: FiPlus, to: '/admin/add-phone' },
+            { label: 'All phones (edit / delete)', icon: FiList, to: '/admin/products' },
             { label: 'Exchange eligible phones', icon: FiPackage, to: '/admin/products' },
             { label: 'Registered customers', icon: FiUsers, to: '/admin/users' },
             { label: 'Active dealers', icon: FiShoppingBag, to: '/admin/dealers' },

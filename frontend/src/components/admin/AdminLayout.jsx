@@ -2,17 +2,24 @@ import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
-  FiGrid, FiShoppingBag, FiTag, FiShoppingCart, FiUsers, FiBriefcase, FiRepeat,
+  FiGrid, FiPlus, FiList, FiTag, FiShoppingCart, FiUsers, FiBriefcase, FiRepeat,
   FiLogOut, FiMenu, FiX, FiChevronRight, FiShield
 } from 'react-icons/fi'
 import { logout } from '../../store/slices/authSlice'
 
-// Kept in three blocks so "what the customer bought" and "what the customer
-// sold us" are never confused with each other.
+// Kept in separate blocks so "what the customer bought", "what the customer
+// sold us" and the phone catalogue are never confused with each other.
 const NAV_GROUPS = [
   {
     label: 'Overview',
     links: [{ to: '/admin', label: 'Dashboard', icon: FiGrid, end: true }],
+  },
+  {
+    label: 'Phones',
+    links: [
+      { to: '/admin/add-phone', label: 'Add Phone', icon: FiPlus, hint: 'Publish a new phone to the store' },
+      { to: '/admin/products', label: 'All Phones', icon: FiList, hint: 'Edit or delete any phone' },
+    ],
   },
   {
     label: 'Orders',
@@ -24,7 +31,6 @@ const NAV_GROUPS = [
   {
     label: 'Catalogue',
     links: [
-      { to: '/admin/products', label: 'Products', icon: FiShoppingBag },
       { to: '/admin/categories', label: 'Categories', icon: FiTag },
     ],
   },
@@ -124,7 +130,7 @@ export default function AdminLayout() {
           <button onClick={() => setSidebarOpen(true)} className="md:hidden text-slate-600 hover:text-indigo-600">
             <FiMenu className="w-5 h-5" />
           </button>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-sm text-slate-500 truncate">
               Signed in as <span className="font-semibold text-slate-800">{userInfo?.name}</span>
               <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wide">
@@ -132,6 +138,12 @@ export default function AdminLayout() {
               </span>
             </p>
           </div>
+          <button
+            onClick={() => navigate('/admin/add-phone')}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white text-sm font-semibold shadow-md shadow-indigo-500/25 hover:from-indigo-700 hover:to-violet-700 active:scale-95 transition-all shrink-0"
+          >
+            <FiPlus className="w-4 h-4" /> Add Phone
+          </button>
         </header>
 
         <main className="flex-1 p-5 overflow-auto">
