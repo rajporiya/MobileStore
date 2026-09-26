@@ -14,7 +14,7 @@ const {
   getDealerStats,
   deleteRequest,
 } = require('../controllers/tradeInController');
-const { protect, admin, dealer } = require('../middleware/authMiddleware');
+const { protect, admin, dealer, staff, customer } = require('../middleware/authMiddleware');
 const upload = require('../middleware/uploadMiddleware');
 
 router.get('/dealers', getDealers);
@@ -24,10 +24,10 @@ router.get('/my', protect, getMyRequests);
 router.get('/dealer-requests', protect, dealer, getDealerRequests);
 router.get('/:id', protect, getRequestById);
 
-router.post('/', protect, upload.array('images', 5), createRequest);
-router.put('/:id/approve', protect, dealer, approveRequest);
-router.put('/:id/reject', protect, dealer, rejectRequest);
-router.put('/:id/complete', protect, dealer, completeRequest);
+router.post('/', protect, customer, upload.array('images', 5), createRequest);
+router.put('/:id/approve', protect, staff, approveRequest);
+router.put('/:id/reject', protect, staff, rejectRequest);
+router.put('/:id/complete', protect, staff, completeRequest);
 router.put('/:id/cancel', protect, cancelRequest);
 router.delete('/:id', protect, admin, deleteRequest);
 

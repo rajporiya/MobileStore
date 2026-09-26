@@ -57,8 +57,26 @@ const tradeInRequestSchema = new mongoose.Schema(
     decisionAt: {
       type: Date,
     },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    linkedOrder: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Order',
+    },
   },
-  { timestamps: true }
+  { timestamps: true, toJSON: { virtuals: true } }
 );
+
+// Only an approved old phone is worth money against a new phone.
+tradeInRequestSchema.virtual('exchangeValue').get(function () {
+  if (this.status !== 'approved' && this.status !== 'completed') return 0;
+  return this.dealerPrice || 0;
+});
+
+tradeInRequestSchema.virtual('isExchangeable').get(function () {
+  return !this.linkedOrder && ['pending', 'approved'].includes(this.status);
+});
 
 module.exports = mongoose.model('TradeInRequest', tradeInRequestSchema);

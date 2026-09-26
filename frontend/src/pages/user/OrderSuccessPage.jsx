@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { FiCheckCircle, FiPackage, FiArrowRight } from 'react-icons/fi'
+import { FiCheckCircle, FiPackage, FiArrowRight, FiRepeat } from 'react-icons/fi'
 import api from '../../services/api'
 
 export default function OrderSuccessPage() {
@@ -94,11 +94,41 @@ export default function OrderSuccessPage() {
               <span>GST (18%)</span>
               <span>₹{order.taxPrice?.toLocaleString('en-IN')}</span>
             </div>
+            {order.tradeInValue > 0 && (
+              <div className="flex justify-between text-emerald-600">
+                <span>Exchange: {order.tradeIn?.brand} {order.tradeIn?.model}</span>
+                <span>-₹{order.tradeInValue.toLocaleString('en-IN')}</span>
+              </div>
+            )}
             <div className="flex justify-between text-brown-dark font-bold text-base border-t border-cream-200 pt-2 mt-1">
               <span>Total</span>
               <span>₹{order.totalPrice?.toLocaleString('en-IN')}</span>
             </div>
           </div>
+
+          <hr className="border-cream-200" />
+
+          {/* Old phone handed in */}
+          {order.tradeIn?.request && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4">
+              <p className="text-xs font-semibold text-indigo-700 mb-1 flex items-center gap-2">
+                <FiRepeat className="w-4 h-4" /> Old phone exchange
+              </p>
+              <p className="text-sm font-medium text-indigo-900">
+                {order.tradeIn.brand} {order.tradeIn.model}
+              </p>
+              {order.tradeIn.status === 'approved' ? (
+                <p className="text-xs text-indigo-700 mt-1">
+                  Valued at ₹{(order.tradeIn.value || 0).toLocaleString('en-IN')} and deducted from this
+                  order. Please hand the phone over at delivery.
+                </p>
+              ) : (
+                <p className="text-xs text-indigo-700 mt-1">
+                  Awaiting admin approval. The value will be deducted from this order's total once approved.
+                </p>
+              )}
+            </div>
+          )}
 
           <hr className="border-cream-200" />
 

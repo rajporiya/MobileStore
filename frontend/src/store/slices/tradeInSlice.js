@@ -49,9 +49,28 @@ export const fetchDealerStats = createAsyncThunk('tradeIn/fetchDealerStats', asy
     const { data } = await api.get('/tradein/stats/dealer')
     return data.data
   } catch (err) {
-    return rejectWithValue(err.response?.data?.message || 'Failed to load stats')
+    return rejectWithValue(err.response?.data?.message || 'Failed to fetch stats')
   }
 })
+
+export const fetchAllTradeInRequests = createAsyncThunk('tradeIn/fetchAll', async (status = '', { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/tradein/admin', { params: { status: status || undefined } })
+    return data.data
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || 'Failed to load requests')
+  }
+})
+
+export const deleteTradeInRequest = createAsyncThunk('tradeIn/delete', async (id, { rejectWithValue }) => {
+  try {
+    const { data } = await api.delete(`/tradein/${id}`)
+    return { id, message: data.message }
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || 'Failed to delete request')
+  }
+})
+
 
 export const approveTradeInRequest = createAsyncThunk('tradeIn/approve', async ({ id, dealerPrice, note }, { rejectWithValue }) => {
   try {
@@ -89,10 +108,14 @@ export const cancelTradeInRequest = createAsyncThunk('tradeIn/cancel', async (id
   }
 })
 
+const patchRequest = (list, updated) =>
+  list.map((r) => (r._id === updated._id ? updated : r))
+
 const initialState = {
   dealers: [],
   myRequests: [],
   dealerRequests: [],
+  allRequests: [],
   dealerStats: { total: 0, pending: 0, approved: 0, rejected: 0, completed: 0 },
   loading: false,
   submitting: false,
@@ -160,30 +183,42 @@ const tradeInSlice = createSlice({
 
       // Approve
       .addCase(approveTradeInRequest.fulfilled, (state, action) => {
-        state.dealerRequests = state.dealerRequests.map((r) =>
-          (r._id === action.payload._id ? action.payload : r)
-        )
+        state.dealerRequests = patchRequest(state.dealerRequests, action.payload)
+        state.allRequests = patchRequest(state.allRequests, action.payload)
+        state.myRequests = patchRequest(state.myRequests, action.payload)
       })
 
       // Reject
       .addCase(rejectTradeInRequest.fulfilled, (state, action) => {
-        state.dealerRequests = state.dealerRequests.map((r) =>
-          (r._id === action.payload._id ? action.payload : r)
-        )
+        state.dealerRequests = patchRequest(state.dealerRequests, action.payload)
+        state.allRequests = patchRequest(state.allRequests, action.payload)
+        state.myRequests = patchRequest(state.myRequests, action.payload)
       })
 
       // Complete
       .addCase(completeTradeInRequest.fulfilled, (state, action) => {
-        state.dealerRequests = state.dealerRequests.map((r) =>
-          (r._id === action.payload._id ? action.payload : r)
-        )
+        state.dealerRequests = patchRequest(state.dealerRequests, action.payload)
+        state.allRequests = patchRequest(state.allRequests, action.payload)
+        state.myRequests = patchRequest(state.myRequests, action.payload)
       })
 
       // Cancel
       .addCase(cancelTradeInRequest.fulfilled, (state, action) => {
-        state.myRequests = state.myRequests.map((r) =>
-          (r._id === action.payload._id ? action.payload : r)
-        )
+        state.myRequests = patchRequest(state.myRequests, action.payload)
+      })
+
+      // Admin list
+      .addCase(fetchAllTradeInRequests.pending, (state) => { state.loading = true })
+      .addCase(fetchAllTradeInRequests.fulfilled, (state, action) => {
+        state.loading = false
+        state.allRequests = action.payload
+      })
+      .addCase(fetchAllTradeInRequests.rejected, (state, action) => {
+        state.loading = false
+        state.error = action.payload
+      })
+      .addCase(deleteTradeInRequest.fulfilled, (state, action) => {
+        state.allRequests = state.allRequests.filter((r) => r._id !== action.payload.id)
       })
   },
 })

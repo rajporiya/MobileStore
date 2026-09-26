@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import {
-  FiGrid, FiShoppingBag, FiTag, FiShoppingCart, FiUsers, FiBriefcase,
+  FiGrid, FiShoppingBag, FiTag, FiShoppingCart, FiUsers, FiBriefcase, FiRepeat,
   FiLogOut, FiMenu, FiX, FiChevronRight
 } from 'react-icons/fi'
 import { logout } from '../../store/slices/authSlice'
@@ -12,6 +12,7 @@ const NAV_LINKS = [
   { to: '/admin/products', label: 'Products', icon: FiShoppingBag },
   { to: '/admin/categories', label: 'Categories', icon: FiTag },
   { to: '/admin/orders', label: 'Orders', icon: FiShoppingCart },
+  { to: '/admin/exchange', label: 'Exchange', icon: FiRepeat },
   { to: '/admin/users', label: 'Users', icon: FiUsers },
   { to: '/admin/dealers', label: 'Dealers', icon: FiBriefcase },
 ]

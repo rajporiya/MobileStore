@@ -1,6 +1,53 @@
 const asyncHandler = require('express-async-handler');
 const TradeInRequest = require('../models/TradeInRequest');
+const Order = require('../models/Order');
 const User = require('../models/User');
+
+const LIST_POPULATE = [
+  { path: 'user', select: 'name email phone address' },
+  { path: 'dealer', select: 'name dealerInfo phone email' },
+  { path: 'linkedOrder', select: '_id totalPrice orderStatus' },
+  { path: 'approvedBy', select: 'name' },
+];
+
+const round2 = (value) => Math.round(value * 100) / 100;
+
+// Admins may act on any request; a dealer only on requests assigned to them.
+const canDecide = (request, user) =>
+  user.role === 'admin' || request.dealer.toString() === user._id.toString();
+
+// Recalculates an order that was placed against this old phone so the latest
+// admin decision is always reflected in the amount the customer owes.
+const syncExchangeWithOrder = async (request) => {
+  if (!request.linkedOrder) return null;
+
+  const order = await Order.findById(request.linkedOrder);
+  if (!order) return null;
+
+  const grossTotal = round2(order.itemsPrice + order.shippingPrice + order.taxPrice);
+  const value =
+    request.status === 'approved' || request.status === 'completed'
+      ? Math.min(Math.max(request.dealerPrice || 0, 0), grossTotal)
+      : 0;
+
+  const alreadyApplied = order.tradeInValue || 0;
+
+  order.tradeIn = {
+    request: request._id,
+    brand: request.brand,
+    model: request.model,
+    status: request.status,
+    value,
+    refundDue:
+      order.paymentStatus === 'paid' ? round2(Math.max(0, value - alreadyApplied)) : 0,
+  };
+  order.tradeInValue = value;
+  order.totalPrice = round2(Math.max(0, grossTotal - value));
+
+  return order.save();
+};
+
+const withRelations = (request) => request.populate(LIST_POPULATE);
 
 // @desc  Get active dealers (for user to select)
 // @route GET /api/tradein/dealers
@@ -59,7 +106,10 @@ const createRequest = asyncHandler(async (req, res) => {
 // @route GET /api/tradein/my
 const getMyRequests = asyncHandler(async (req, res) => {
   const requests = await TradeInRequest.find({ user: req.user._id })
-    .populate('dealer', 'name dealerInfo phone email')
+    .populate([
+      { path: 'dealer', select: 'name dealerInfo phone email' },
+      { path: 'linkedOrder', select: '_id totalPrice orderStatus' },
+    ])
     .sort({ createdAt: -1 });
 
   res.json({ success: true, data: requests });
@@ -68,9 +118,7 @@ const getMyRequests = asyncHandler(async (req, res) => {
 // @desc  Get single trade-in request (owner / assigned dealer / admin)
 // @route GET /api/tradein/:id
 const getRequestById = asyncHandler(async (req, res) => {
-  const request = await TradeInRequest.findById(req.params.id)
-    .populate('user', 'name email phone address')
-    .populate('dealer', 'name dealerInfo phone email');
+  const request = await TradeInRequest.findById(req.params.id).populate(LIST_POPULATE);
 
   if (!request) {
     res.status(404);
@@ -96,13 +144,13 @@ const getDealerRequests = asyncHandler(async (req, res) => {
   if (status) filter.status = status;
 
   const requests = await TradeInRequest.find(filter)
-    .populate('user', 'name email phone address')
+    .populate(LIST_POPULATE)
     .sort({ createdAt: -1 });
 
   res.json({ success: true, data: requests });
 });
 
-// @desc  Approve trade-in request (dealer)
+// @desc  Approve trade-in request and set the old phone value (admin or assigned dealer)
 // @route PUT /api/tradein/:id/approve
 const approveRequest = asyncHandler(async (req, res) => {
   const { dealerPrice, note } = req.body;
@@ -112,30 +160,32 @@ const approveRequest = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Trade-in request not found');
   }
-  if (request.dealer.toString() !== req.user._id.toString()) {
+  if (!canDecide(request, req.user)) {
     res.status(403);
     throw new Error('Not authorized for this request');
   }
-  if (request.status !== 'pending') {
+  if (request.status !== 'pending' && request.status !== 'approved') {
     res.status(400);
     throw new Error(`Cannot approve a ${request.status} request`);
   }
 
   request.status = 'approved';
   request.dealerPrice = Number(dealerPrice) || request.expectedPrice || 0;
-  request.dealerNote = note || '';
+  request.dealerNote = note !== undefined ? note : request.dealerNote;
   request.decisionAt = new Date();
+  request.approvedBy = req.user._id;
 
   const updated = await request.save();
-  const populated = await updated.populate([
-    { path: 'user', select: 'name email phone' },
-    { path: 'dealer', select: 'name dealerInfo' },
-  ]);
+  await syncExchangeWithOrder(updated);
 
-  res.json({ success: true, data: populated });
+  res.json({
+    success: true,
+    message: `Old phone valued at ₹${updated.dealerPrice}`,
+    data: await withRelations(updated),
+  });
 });
 
-// @desc  Reject trade-in request (dealer)
+// @desc  Reject trade-in request (admin or assigned dealer)
 // @route PUT /api/tradein/:id/reject
 const rejectRequest = asyncHandler(async (req, res) => {
   const { note } = req.body;
@@ -145,11 +195,11 @@ const rejectRequest = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Trade-in request not found');
   }
-  if (request.dealer.toString() !== req.user._id.toString()) {
+  if (!canDecide(request, req.user)) {
     res.status(403);
     throw new Error('Not authorized for this request');
   }
-  if (request.status !== 'pending') {
+  if (request.status !== 'pending' && request.status !== 'approved') {
     res.status(400);
     throw new Error(`Cannot reject a ${request.status} request`);
   }
@@ -158,14 +208,16 @@ const rejectRequest = asyncHandler(async (req, res) => {
   request.dealerPrice = 0;
   request.dealerNote = note || '';
   request.decisionAt = new Date();
+  request.approvedBy = req.user._id;
 
   const updated = await request.save();
-  const populated = await updated.populate([
-    { path: 'user', select: 'name email phone' },
-    { path: 'dealer', select: 'name dealerInfo' },
-  ]);
+  await syncExchangeWithOrder(updated);
 
-  res.json({ success: true, data: populated });
+  res.json({
+    success: true,
+    message: 'Request rejected',
+    data: await withRelations(updated),
+  });
 });
 
 // @desc  Mark trade-in as completed (dealer paid the user & took the phone)
@@ -177,7 +229,7 @@ const completeRequest = asyncHandler(async (req, res) => {
     res.status(404);
     throw new Error('Trade-in request not found');
   }
-  if (request.dealer.toString() !== req.user._id.toString()) {
+  if (!canDecide(request, req.user)) {
     res.status(403);
     throw new Error('Not authorized for this request');
   }
@@ -190,12 +242,9 @@ const completeRequest = asyncHandler(async (req, res) => {
   request.decisionAt = new Date();
 
   const updated = await request.save();
-  const populated = await updated.populate([
-    { path: 'user', select: 'name email phone' },
-    { path: 'dealer', select: 'name dealerInfo' },
-  ]);
+  await syncExchangeWithOrder(updated);
 
-  res.json({ success: true, data: populated });
+  res.json({ success: true, data: await withRelations(updated) });
 });
 
 // @desc  Cancel trade-in request (user)
@@ -228,8 +277,7 @@ const getAllRequests = asyncHandler(async (req, res) => {
   const filter = status ? { status } : {};
 
   const requests = await TradeInRequest.find(filter)
-    .populate('user', 'name email phone')
-    .populate('dealer', 'name dealerInfo')
+    .populate(LIST_POPULATE)
     .sort({ createdAt: -1 });
 
   res.json({ success: true, data: requests });
@@ -260,6 +308,10 @@ const deleteRequest = asyncHandler(async (req, res) => {
   if (!request) {
     res.status(404);
     throw new Error('Trade-in request not found');
+  }
+  if (request.linkedOrder) {
+    res.status(400);
+    throw new Error('Cancel the exchange on the linked order before deleting this request');
   }
   await request.deleteOne();
   res.json({ success: true, message: 'Trade-in request deleted' });

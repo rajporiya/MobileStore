@@ -49,4 +49,25 @@ const dealer = (req, res, next) => {
   }
 };
 
-module.exports = { protect, admin, dealer };
+// Admins can act on any trade-in request, dealers only on their own.
+const staff = (req, res, next) => {
+  if (req.user && (req.user.role === 'admin' || req.user.role === 'dealer')) {
+    next();
+  } else {
+    res.status(403);
+    throw new Error('Not authorized for this action');
+  }
+};
+
+// Only shoppers sell an old phone. Staff review the phones customers bring in,
+// they never submit one themselves.
+const customer = (req, res, next) => {
+  if (req.user && req.user.role === 'user') {
+    next();
+  } else {
+    res.status(403);
+    throw new Error('Only customer accounts can sell an old phone');
+  }
+};
+
+module.exports = { protect, admin, dealer, staff, customer };

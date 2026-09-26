@@ -20,6 +20,7 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminProducts from './pages/admin/AdminProducts'
 import AdminCategories from './pages/admin/AdminCategories'
 import AdminOrders from './pages/admin/AdminOrders'
+import AdminTradeIns from './pages/admin/AdminTradeIns'
 import AdminUsers from './pages/admin/AdminUsers'
 import AdminLogin from './pages/admin/AdminLogin'
 import AdminDealers from './pages/admin/AdminDealers'
@@ -35,6 +36,7 @@ import UserLayout from './components/user/UserLayout'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import AdminRoute from './components/common/AdminRoute'
 import DealerRoute from './components/common/DealerRoute'
+import CustomerRoute from './components/common/CustomerRoute'
 import ScrollToTop from './components/common/ScrollToTop'
 
 import { loadUserFromStorage } from './store/slices/authSlice'
@@ -61,7 +63,7 @@ function App() {
           <Route path="register" element={<RegisterPage />} />
           <Route path="checkout" element={<ProtectedRoute><CheckoutPage /></ProtectedRoute>} />
           <Route path="profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
-          <Route path="sell-mobile" element={<ProtectedRoute><SellMobilePage /></ProtectedRoute>} />
+          <Route path="sell-mobile" element={<CustomerRoute><SellMobilePage /></CustomerRoute>} />
           <Route path="order-success/:id" element={<ProtectedRoute><OrderSuccessPage /></ProtectedRoute>} />
         </Route>
 
@@ -78,6 +80,7 @@ function App() {
           <Route path="products" element={<AdminProducts />} />
           <Route path="categories" element={<AdminCategories />} />
           <Route path="orders" element={<AdminOrders />} />
+          <Route path="exchange" element={<AdminTradeIns />} />
           <Route path="users" element={<AdminUsers />} />
           <Route path="dealers" element={<AdminDealers />} />
         </Route>

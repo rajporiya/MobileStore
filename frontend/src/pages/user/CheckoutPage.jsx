@@ -1,15 +1,25 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-import { useNavigate } from 'react-router-dom'
-import { FiCreditCard, FiTruck, FiCheckCircle } from 'react-icons/fi'
+import { Link, useNavigate } from 'react-router-dom'
+import { FiCreditCard, FiTruck, FiCheckCircle, FiRepeat } from 'react-icons/fi'
 import { createOrder } from '../../store/slices/orderSlice'
 import { clearCart, selectCartItems, selectCartTotal } from '../../store/slices/cartSlice'
+import { fetchMyRequests } from '../../store/slices/tradeInSlice'
 
 const PAYMENT_METHODS = [
   { value: 'cod', label: 'Cash on Delivery', icon: '💵' },
   { value: 'razorpay', label: 'Razorpay (UPI / Card)', icon: '💳' },
   { value: 'stripe', label: 'Stripe (International)', icon: '🌐' },
 ]
+
+const STEPS = [
+  { n: 1, label: 'Address' },
+  { n: 2, label: 'Payment' },
+  { n: 3, label: 'Exchange' },
+  { n: 4, label: 'Review' },
+]
+
+const CONDITION_LABELS = { excellent: 'Excellent', good: 'Good', fair: 'Fair', poor: 'Poor' }
 
 export default function CheckoutPage() {
   const dispatch = useDispatch()
@@ -18,6 +28,7 @@ export default function CheckoutPage() {
   const cartTotal = useSelector(selectCartTotal)
   const { userInfo } = useSelector((s) => s.auth)
   const { loading } = useSelector((s) => s.orders)
+  const { myRequests } = useSelector((s) => s.tradeIn)
 
   const [form, setForm] = useState({
     fullName: userInfo?.name || '',
@@ -29,11 +40,25 @@ export default function CheckoutPage() {
     country: userInfo?.address?.country || 'India',
   })
   const [paymentMethod, setPaymentMethod] = useState('cod')
-  const [step, setStep] = useState(1) // 1: address, 2: payment, 3: review
+  const [step, setStep] = useState(1) // 1: address, 2: payment, 3: exchange, 4: review
+  const [tradeInId, setTradeInId] = useState('')
+
+  useEffect(() => {
+    dispatch(fetchMyRequests())
+  }, [dispatch])
 
   const shippingPrice = cartTotal >= 999 ? 0 : 99
   const taxAmount = Math.round(cartTotal * 0.18)
-  const totalAmount = cartTotal + shippingPrice + taxAmount
+
+  // Only old phones the admin has not turned down and that are not already
+  // spoken for by another order can back this purchase.
+  const exchangeable = myRequests.filter(
+    (r) => !r.linkedOrder && (r.status === 'approved' || r.status === 'pending')
+  )
+  const selectedTradeIn = exchangeable.find((r) => r._id === tradeInId) || null
+  const exchangeValue = selectedTradeIn?.exchangeValue ?? 0
+
+  const totalAmount = Math.max(0, cartTotal + shippingPrice + taxAmount - exchangeValue)
 
   const handleFormChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -47,6 +72,7 @@ export default function CheckoutPage() {
       })),
       shippingAddress: form,
       paymentMethod,
+      tradeInRequestId: selectedTradeIn?._id || undefined,
     }
 
     const result = await dispatch(createOrder(orderData))
@@ -62,11 +88,7 @@ export default function CheckoutPage() {
 
       {/* Step indicators */}
       <div className="flex items-center gap-2 mb-8">
-        {[
-          { n: 1, label: 'Address' },
-          { n: 2, label: 'Payment' },
-          { n: 3, label: 'Review' },
-        ].map(({ n, label }, idx) => (
+        {STEPS.map(({ n, label }, idx) => (
           <div key={n} className="flex items-center gap-2">
             <button
               onClick={() => n < step && setStep(n)}
@@ -76,7 +98,7 @@ export default function CheckoutPage() {
               {step > n ? <FiCheckCircle className="w-3.5 h-3.5" /> : <span>{n}</span>}
               {label}
             </button>
-            {idx < 2 && <div className={`h-0.5 w-8 ${step > n ? 'bg-brown' : 'bg-cream-200'}`} />}
+            {idx < STEPS.length - 1 && <div className={`h-0.5 w-8 ${step > n ? 'bg-brown' : 'bg-cream-200'}`} />}
           </div>
         ))}
       </div>
@@ -161,13 +183,93 @@ export default function CheckoutPage() {
               </div>
               <div className="flex gap-3 mt-6">
                 <button onClick={() => setStep(1)} className="btn-secondary flex-1 py-3">Back</button>
-                <button onClick={() => setStep(3)} className="btn-primary flex-1 py-3">Review Order</button>
+                <button onClick={() => setStep(3)} className="btn-primary flex-1 py-3">Continue to Exchange</button>
               </div>
             </div>
           )}
 
-          {/* Step 3: Review */}
+          {/* Step 3: Exchange */}
           {step === 3 && (
+            <div className="card p-6">
+              <h2 className="font-bold text-brown-dark text-lg mb-1 flex items-center gap-2">
+                <FiRepeat className="w-5 h-5" /> Exchange Your Old Phone
+              </h2>
+              <p className="text-sm text-stone-500 mb-5">
+                Hand over an old phone and its value is deducted from the new phone price.
+              </p>
+
+              {exchangeable.length === 0 ? (
+                <div className="bg-cream-50 rounded-xl p-6 text-center">
+                  <p className="text-sm text-stone-600 mb-3">You have no old phone ready for exchange.</p>
+                  <Link to="/sell-mobile" className="btn-secondary inline-block">Sell an Old Phone</Link>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <label
+                    className={`flex items-center gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all
+                      ${!selectedTradeIn ? 'border-brown bg-primary-50' : 'border-cream-200 hover:border-brown-light'}`}
+                  >
+                    <input
+                      type="radio"
+                      name="tradein"
+                      checked={!selectedTradeIn}
+                      onChange={() => setTradeInId('')}
+                      className="accent-brown"
+                    />
+                    <span className="font-medium text-stone-800">No exchange — pay full price</span>
+                  </label>
+
+                  {exchangeable.map((req) => {
+                    const value = req.exchangeValue ?? 0
+                    const isSelected = tradeInId === req._id
+                    return (
+                      <label
+                        key={req._id}
+                        className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all
+                          ${isSelected ? 'border-brown bg-primary-50' : 'border-cream-200 hover:border-brown-light'}`}
+                      >
+                        <input
+                          type="radio"
+                          name="tradein"
+                          checked={isSelected}
+                          onChange={() => setTradeInId(req._id)}
+                          className="accent-brown mt-1"
+                        />
+                        {req.images?.[0] ? (
+                          <img src={req.images[0].url} alt="" className="w-12 h-12 rounded-lg object-cover bg-cream-100 shrink-0" />
+                        ) : (
+                          <div className="w-12 h-12 rounded-lg bg-cream-100 flex items-center justify-center text-xl shrink-0">📱</div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-stone-800">{req.brand} {req.model}</p>
+                          <p className="text-xs text-stone-500 mt-0.5">
+                            Condition: {CONDITION_LABELS[req.condition] || req.condition}
+                          </p>
+                          {value > 0 ? (
+                            <p className="text-xs font-semibold text-emerald-600 mt-1">
+                              -{value.toLocaleString('en-IN')} off your new phone
+                            </p>
+                          ) : (
+                            <p className="text-xs text-amber-600 mt-1">
+                              Awaiting admin approval — no deduction yet
+                            </p>
+                          )}
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-6">
+                <button onClick={() => setStep(2)} className="btn-secondary flex-1 py-3">Back</button>
+                <button onClick={() => setStep(4)} className="btn-primary flex-1 py-3">Review Order</button>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Review */}
+          {step === 4 && (
             <div className="card p-6">
               <h2 className="font-bold text-brown-dark text-lg mb-5">Review Order</h2>
               <div className="bg-cream-50 rounded-xl p-4 mb-4 text-sm">
@@ -180,6 +282,25 @@ export default function CheckoutPage() {
                   {PAYMENT_METHODS.find((m) => m.value === paymentMethod)?.label}
                 </p>
               </div>
+              {selectedTradeIn && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-4 text-sm">
+                  <p className="font-semibold text-emerald-800 flex items-center gap-2">
+                    <FiRepeat className="w-4 h-4" />
+                    Exchanging {selectedTradeIn.brand} {selectedTradeIn.model}
+                  </p>
+                  {exchangeValue > 0 ? (
+                    <p className="text-emerald-700 mt-1">
+                      -{exchangeValue.toLocaleString('en-IN')} deducted from the new phone price. Hand the old
+                      phone over at delivery.
+                    </p>
+                  ) : (
+                    <p className="text-emerald-700 mt-1">
+                      Our admin will value this phone. The amount is deducted from your order total once
+                      approved.
+                    </p>
+                  )}
+                </div>
+              )}
               <div className="space-y-2 mb-4">
                 {cartItems.map((item) => (
                   <div key={item._id} className="flex items-center gap-3 text-sm">
@@ -191,7 +312,7 @@ export default function CheckoutPage() {
                 ))}
               </div>
               <div className="flex gap-3 mt-6">
-                <button onClick={() => setStep(2)} className="btn-secondary flex-1 py-3">Back</button>
+                <button onClick={() => setStep(3)} className="btn-secondary flex-1 py-3">Back</button>
                 <button
                   onClick={handlePlaceOrder}
                   disabled={loading}
@@ -228,6 +349,16 @@ export default function CheckoutPage() {
               <div className="flex justify-between text-stone-600">
                 <span>GST (18%)</span><span>₹{taxAmount.toLocaleString('en-IN')}</span>
               </div>
+              {selectedTradeIn && (
+                <div className="flex justify-between text-emerald-600">
+                  <span className="line-clamp-1 flex-1 mr-2">
+                    Exchange: {selectedTradeIn.brand} {selectedTradeIn.model}
+                  </span>
+                  <span className="shrink-0 font-semibold">
+                    {exchangeValue > 0 ? `-₹${exchangeValue.toLocaleString('en-IN')}` : 'pending'}
+                  </span>
+                </div>
+              )}
               <hr className="border-cream-200" />
               <div className="flex justify-between font-bold text-brown-dark">
                 <span>Total</span><span>₹{totalAmount.toLocaleString('en-IN')}</span>

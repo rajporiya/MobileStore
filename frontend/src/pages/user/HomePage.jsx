@@ -17,6 +17,7 @@ const features = [
 export default function HomePage() {
   const dispatch = useDispatch()
   const { featured, loading } = useSelector((s) => s.products)
+  const { userInfo } = useSelector((s) => s.auth)
   const [categories, setCategories] = useState([])
 
   useEffect(() => {
@@ -147,7 +148,8 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Sell Old Phone CTA */}
+      {/* Sell Old Phone CTA — shoppers only, staff never sell to us */}
+      {userInfo?.role === 'user' && (
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-16">
         <div className="relative bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-600 rounded-3xl overflow-hidden p-8 md:p-12">
           <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '26px 26px' }} />
@@ -173,6 +175,7 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      )}
     </div>
   )
 }

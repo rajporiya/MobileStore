@@ -38,6 +38,9 @@ export default function Navbar() {
     return location.pathname.startsWith(to.split('?')[0])
   }
 
+  // Only shoppers sell an old phone — staff work on the requests customers send.
+  const canSellPhone = userInfo?.role === 'user'
+
   return (
     <header className="bg-white/80 backdrop-blur-xl sticky top-0 z-50 border-b border-slate-200/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -63,7 +66,7 @@ export default function Navbar() {
                 {label}
               </Link>
             ))}
-            {userInfo && (
+            {canSellPhone && (
               <Link
                 to="/sell-mobile"
                 className={`px-3.5 py-2 flex items-center gap-1.5 text-sm font-semibold rounded-lg transition-all ${
@@ -124,10 +127,12 @@ export default function Navbar() {
                       className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
                       <FiPackage className="w-4 h-4" /> My Orders
                     </Link>
-                    <Link to="/sell-mobile" onClick={() => setProfileOpen(false)}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
-                      <FiSmartphone className="w-4 h-4" /> Sell Old Phone
-                    </Link>
+                    {canSellPhone && (
+                      <Link to="/sell-mobile" onClick={() => setProfileOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors">
+                        <FiSmartphone className="w-4 h-4" /> Sell Old Phone
+                      </Link>
+                    )}
                     {userInfo.role === 'dealer' && (
                       <Link to="/dealer" onClick={() => setProfileOpen(false)}
                         className="flex items-center gap-2 px-4 py-2 text-sm text-indigo-600 hover:bg-indigo-50 transition-colors font-medium">
@@ -187,7 +192,7 @@ export default function Navbar() {
                   {label}
                 </Link>
               ))}
-              {userInfo && (
+              {canSellPhone && (
                 <Link to="/sell-mobile" onClick={() => setMobileOpen(false)}
                   className="px-4 py-2.5 rounded-xl text-sm font-semibold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 transition-colors flex items-center gap-2">
                   <FiSmartphone className="w-4 h-4" /> Sell Old Phone

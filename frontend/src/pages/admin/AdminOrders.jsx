@@ -24,7 +24,7 @@ export default function AdminOrders() {
 
   const handleStatusChange = async (orderId, status) => {
     setUpdating(orderId)
-    const result = await dispatch(updateOrderStatus({ orderId, status }))
+    const result = await dispatch(updateOrderStatus({ id: orderId, orderStatus: status }))
     if (updateOrderStatus.fulfilled.match(result)) {
       toast.success('Order status updated')
     } else {
@@ -42,16 +42,16 @@ export default function AdminOrders() {
           <table className="w-full text-sm">
             <thead className="bg-cream-50">
               <tr>
-                {['Order ID', 'Customer', 'Date', 'Items', 'Total', 'Payment', 'Status', 'Update Status'].map((h) => (
+                {['Order ID', 'Customer', 'Date', 'Items', 'Exchange', 'Total', 'Payment', 'Status', 'Update Status'].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-stone-500 uppercase tracking-wide">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-cream-100">
               {loading ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-stone-400">Loading...</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-stone-400">Loading...</td></tr>
               ) : allOrders.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-8 text-center text-stone-400">No orders found.</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-stone-400">No orders found.</td></tr>
               ) : allOrders.map((order) => (
                 <tr key={order._id} className="hover:bg-cream-50">
                   <td className="px-4 py-3 font-mono text-xs text-stone-600">{order._id.slice(-10)}</td>
@@ -60,6 +60,25 @@ export default function AdminOrders() {
                     {new Date(order.createdAt).toLocaleDateString('en-IN')}
                   </td>
                   <td className="px-4 py-3 text-center">{order.orderItems?.length}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {order.tradeInValue > 0 ? (
+                      <div>
+                        <p className="font-semibold text-emerald-600">
+                          -₹{order.tradeInValue.toLocaleString('en-IN')}
+                        </p>
+                        <p className="text-xs text-stone-500">
+                          {order.tradeIn?.brand} {order.tradeIn?.model}
+                        </p>
+                      </div>
+                    ) : order.tradeIn?.request ? (
+                      <div>
+                        <p className="text-amber-600 text-xs font-medium">awaiting value</p>
+                        <p className="text-xs text-stone-500">{order.tradeIn?.brand} {order.tradeIn?.model}</p>
+                      </div>
+                    ) : (
+                      <span className="text-stone-300">—</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 font-semibold text-brown-dark whitespace-nowrap">
                     ₹{order.totalPrice?.toLocaleString('en-IN')}
                   </td>

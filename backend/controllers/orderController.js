@@ -1,13 +1,14 @@
 const asyncHandler = require('express-async-handler');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const TradeInRequest = require('../models/TradeInRequest');
 const { sendOrderConfirmation } = require('../services/whatsappService');
 const { sendOrderSms } = require('../services/smsService');
 
 // @desc  Create new order
 // @route POST /api/orders
 const createOrder = asyncHandler(async (req, res) => {
-  const { orderItems, shippingAddress, paymentMethod } = req.body;
+  const { orderItems, shippingAddress, paymentMethod, tradeInRequestId } = req.body;
 
   if (!orderItems || orderItems.length === 0) {
     res.status(400);
@@ -38,9 +39,45 @@ const createOrder = asyncHandler(async (req, res) => {
     itemsPrice += product.price * item.quantity;
   }
 
+  // Old phone handed in against this order. Its admin-approved value is
+  // deducted from the new phone price.
+  let tradeIn = null;
+  let tradeInValue = 0;
+
+  if (tradeInRequestId) {
+    const request = await TradeInRequest.findById(tradeInRequestId);
+
+    if (!request || request.user.toString() !== req.user._id.toString()) {
+      res.status(404);
+      throw new Error('Trade-in request not found');
+    }
+    if (request.linkedOrder) {
+      res.status(400);
+      throw new Error('This old phone has already been used in another order');
+    }
+    if (request.status === 'rejected' || request.status === 'cancelled') {
+      res.status(400);
+      throw new Error('This old phone request cannot be used for an exchange');
+    }
+
+    tradeInValue = request.exchangeValue;
+    tradeIn = {
+      request: request._id,
+      brand: request.brand,
+      model: request.model,
+      status: request.status,
+      value: tradeInValue,
+    };
+  }
+
   const shippingPrice = itemsPrice >= 999 ? 0 : 99;
   const taxPrice = Math.round(itemsPrice * 0.18 * 100) / 100;
-  const totalPrice = Math.round((itemsPrice + shippingPrice + taxPrice) * 100) / 100;
+  const grossTotal = Math.round((itemsPrice + shippingPrice + taxPrice) * 100) / 100;
+
+  tradeInValue = Math.min(tradeInValue, grossTotal);
+  if (tradeIn) tradeIn.value = tradeInValue;
+
+  const totalPrice = Math.round((grossTotal - tradeInValue) * 100) / 100;
 
   const order = await Order.create({
     user: req.user._id,
@@ -50,8 +87,15 @@ const createOrder = asyncHandler(async (req, res) => {
     itemsPrice,
     shippingPrice,
     taxPrice,
+    tradeInValue,
+    tradeIn,
     totalPrice,
   });
+
+  // A trade-in request can only ever back one order.
+  if (tradeIn) {
+    await TradeInRequest.findByIdAndUpdate(tradeIn.request, { linkedOrder: order._id });
+  }
 
   // Reduce stock
   for (const item of verifiedItems) {
@@ -107,7 +151,8 @@ const getMyOrders = asyncHandler(async (req, res) => {
 const getOrderById = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id)
     .populate('user', 'name email')
-    .populate('orderItems.product', 'title images');
+    .populate('orderItems.product', 'title images')
+    .populate('tradeIn.request', 'brand model status dealerPrice condition');
 
   if (!order) {
     res.status(404);
@@ -209,11 +254,16 @@ const getOrderStats = asyncHandler(async (req, res) => {
     { $group: { _id: '$orderStatus', count: { $sum: 1 } } },
   ]);
 
+  const totalExchangeValue = await Order.aggregate([
+    { $group: { _id: null, total: { $sum: '$tradeInValue' } } },
+  ]);
+
   res.json({
     success: true,
     data: {
       totalOrders,
       totalRevenue: totalRevenue[0]?.total || 0,
+      totalExchangeValue: totalExchangeValue[0]?.total || 0,
       recentOrders,
       ordersByStatus,
     },

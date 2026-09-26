@@ -43,6 +43,19 @@ const orderSchema = new mongoose.Schema(
     itemsPrice: { type: Number, required: true, default: 0 },
     shippingPrice: { type: Number, required: true, default: 0 },
     taxPrice: { type: Number, required: true, default: 0 },
+    tradeInValue: { type: Number, required: true, default: 0 },
+    tradeIn: {
+      request: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TradeInRequest',
+      },
+      brand: { type: String, default: '' },
+      model: { type: String, default: '' },
+      status: { type: String, default: '' },
+      value: { type: Number, default: 0 },
+      // Old phone value that arrived after the customer had already paid.
+      refundDue: { type: Number, default: 0 },
+    },
     totalPrice: { type: Number, required: true, default: 0 },
     paymentStatus: {
       type: String,
