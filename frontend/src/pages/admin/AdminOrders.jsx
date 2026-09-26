@@ -3,19 +3,23 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { FiEye, FiShoppingCart } from 'react-icons/fi'
 
 import api from '../../services/api'
+import { ADMIN_BUTTONS, cx } from '../../components/admin/adminTheme'
 import AdminPageHeader from '../../components/admin/ui/AdminPageHeader'
 import AdminTable from '../../components/admin/ui/AdminTable'
 import AdminPagination from '../../components/admin/ui/AdminPagination'
-import AdminFilterBar from '../../components/admin/ui/AdminFilterBar'
+import AdminTableToolbar from '../../components/admin/ui/AdminTableToolbar'
 import AdminSearchInput from '../../components/admin/ui/AdminSearchInput'
 import AdminSelect from '../../components/admin/ui/AdminSelect'
 import AdminDateRange from '../../components/admin/ui/AdminDateRange'
 import AdminStatusBadge from '../../components/admin/ui/AdminStatusBadge'
 import AdminAvatar from '../../components/admin/ui/AdminAvatar'
-import { SectionCard } from '../../components/admin/ui/AdminPanels'
+import AdminStatCard from '../../components/admin/ui/AdminStatCard'
+import { AdminErrorState } from '../../components/admin/ui/AdminEmptyState'
+import { AdminCardSkeleton } from '../../components/admin/ui/AdminSkeletons'
 import {
   money,
   formatDate,
+  timeAgo,
   shortId,
   errorMessage,
   pluralise,
@@ -39,6 +43,8 @@ export default function AdminOrders() {
   const [total, setTotal] = useState(0)
   const [stats, setStats] = useState(null)
   const [statsLoading, setStatsLoading] = useState(true)
+  const [statsError, setStatsError] = useState(null)
+  const [statsAttempt, setStatsAttempt] = useState(0)
 
   const [filters, setFilters] = useState(() => ({
     search: searchParams.get('search') || '',
@@ -91,13 +97,27 @@ export default function AdminOrders() {
   }, [fetchOrders, page])
 
   useEffect(() => {
+    let active = true
     setStatsLoading(true)
+    setStatsError(null)
     api
       .get('/orders/stats')
-      .then(({ data }) => setStats(data.data || data))
-      .catch(() => setStats(null))
-      .finally(() => setStatsLoading(false))
-  }, [])
+      .then(({ data }) => {
+        if (!active) return
+        setStats(data.data || data)
+      })
+      .catch((err) => {
+        if (!active) return
+        setStats(null)
+        setStatsError(errorMessage(err, 'Order totals could not be loaded.'))
+      })
+      .finally(() => {
+        if (active) setStatsLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [statsAttempt])
 
   const setFilter = (key, value) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
@@ -108,47 +128,89 @@ export default function AdminOrders() {
   const statusCount = (status) => stats?.ordersByStatus?.find((row) => row._id === status)?.count ?? 0
 
   const columns = [
-    { key: 'order', label: 'Order' },
+    { key: 'order', label: 'Order ID' },
     { key: 'customer', label: 'Customer' },
     { key: 'items', label: 'Items' },
     { key: 'total', label: 'Total' },
     { key: 'payment', label: 'Payment' },
     { key: 'status', label: 'Status' },
-    { key: 'date', label: 'Placed' },
-    { key: 'actions', label: '', className: 'w-12' },
+    { key: 'date', label: 'Date' },
+    { key: 'actions', label: '', className: 'w-14' },
   ]
+
+  const resetFilters = () => {
+    setFilters(EMPTY_FILTERS)
+    setPage(1)
+  }
 
   return (
     <>
       <AdminPageHeader
         title="Orders"
-        description={loading ? 'Loading orders…' : `${pluralise(total, 'order')} match the current view`}
-        icon={FiShoppingCart}
-        actions={
-          <Link to="/admin/payments" className="btn-secondary !px-4 !py-2 text-sm inline-flex items-center gap-2">
-            View payments
-          </Link>
+        description="Manage customer orders"
+        eyebrow="Sales"
+        meta={
+          <>
+            <span className="rounded-lg bg-white px-2.5 py-1 text-[12px] text-slate-500 ring-1 ring-inset ring-slate-200">
+              Revenue{' '}
+              <span className="font-semibold tabular-nums text-slate-800">
+                {stats ? money(stats.totalRevenue) : '—'}
+              </span>
+            </span>
+            <span className="rounded-lg bg-white px-2.5 py-1 text-[12px] text-slate-500 ring-1 ring-inset ring-slate-200">
+              In view{' '}
+              <span className="font-semibold tabular-nums text-slate-800">
+                {loading && !orders.length ? '—' : total}
+              </span>{' '}
+              {total === 1 ? 'order' : 'orders'}
+            </span>
+          </>
         }
       />
 
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-4">
-        {[
-          { label: 'Revenue', value: stats ? money(stats.totalRevenue) : '—' },
-          { label: 'Orders', value: stats ? stats.totalOrders : '—' },
-          { label: 'Awaiting action', value: stats ? stats.pendingOrders : '—' },
-          { label: 'Delivered', value: stats ? statusCount('delivered') : '—' },
-        ].map((stat) => (
-          <SectionCard key={stat.label} bodyClassName="px-4 py-3.5">
-            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">{stat.label}</p>
-            <p className="text-xl font-bold text-slate-900 mt-1">
-              {statsLoading && !stats ? <span className="inline-block h-5 w-16 bg-slate-100 rounded animate-pulse" /> : stat.value}
-            </p>
-          </SectionCard>
-        ))}
+      <div className="mb-4 grid grid-cols-2 gap-4 xl:grid-cols-4">
+        {statsLoading && !stats ? (
+          <AdminCardSkeleton count={4} className="col-span-2 xl:col-span-4" />
+        ) : (
+          <>
+            <AdminStatCard
+              label="Total Orders"
+              value={stats ? stats.totalOrders : 0}
+              icon={FiShoppingCart}
+              tone="indigo"
+              hint="All time"
+            />
+            <AdminStatCard
+              label="Awaiting Fulfilment"
+              value={stats ? stats.pendingOrders : 0}
+              tone="amber"
+              hint="Processing, confirmed or shipped"
+            />
+            <AdminStatCard
+              label="Delivered"
+              value={stats ? statusCount('delivered') : 0}
+              tone="green"
+              hint="All time"
+            />
+            <AdminStatCard
+              label="Cancelled"
+              value={stats ? statusCount('cancelled') : 0}
+              tone="red"
+              hint={stats ? `${money(stats.cancelledOrderValue)} written off` : 'All time'}
+            />
+          </>
+        )}
       </div>
 
-      <AdminFilterBar isFiltered={isFiltered} resultCount={total} onReset={() => { setFilters(EMPTY_FILTERS); setPage(1) }}>
+      <AdminTableToolbar
+        onReset={resetFilters}
+        isFiltered={isFiltered}
+        resultCount={total}
+        resultLabel="matching"
+        className="mb-4"
+      >
         <AdminSearchInput
+          label="Search"
           value={filters.search}
           onChange={(value) => setFilter('search', value)}
           placeholder="Order id, customer, phone or item"
@@ -180,7 +242,13 @@ export default function AdminOrders() {
           }}
           className="w-full sm:w-72"
         />
-      </AdminFilterBar>
+      </AdminTableToolbar>
+
+      {statsError && (
+        <div className="mb-4 rounded-xl border border-slate-200 bg-white">
+          <AdminErrorState compact message={statsError} onRetry={() => setStatsAttempt((n) => n + 1)} />
+        </div>
+      )}
 
       <AdminTable
         columns={columns}
@@ -193,72 +261,95 @@ export default function AdminOrders() {
         emptyDescription={isFiltered ? 'Try clearing the status or payment filter.' : 'Orders will appear here as customers check out.'}
         emptyAction={
           isFiltered && (
-            <button onClick={() => { setFilters(EMPTY_FILTERS); setPage(1) }} className="btn-secondary !px-4 !py-2 text-sm">
+            <button type="button" onClick={resetFilters} className={ADMIN_BUTTONS.secondary}>
               Reset filters
             </button>
           )
         }
+        minWidth="min-w-[1040px]"
+        rowKey={(row) => row._id}
         footer={<AdminPagination page={page} pages={pages} total={total} onChange={setPage} itemLabel="orders" />}
       >
         {(keyOf) =>
-          orders.map((order) => (
-            <tr key={keyOf(order)} className="hover:bg-slate-50">
-              <td className="px-4 py-3 whitespace-nowrap">
-                <Link to={`/admin/orders/${order._id}`} className="text-sm font-bold text-slate-800 hover:text-indigo-600">
-                  #{shortId(order._id)}
-                </Link>
-                {order.tradeInValue > 0 && (
-                  <p className="text-[11px] text-violet-600 font-semibold">Trade-in −{money(order.tradeInValue)}</p>
-                )}
-              </td>
+          orders.map((order) => {
+            const lines = order.orderItems?.length || 0
+            const units = (order.orderItems || []).reduce((sum, item) => sum + (item.quantity || 0), 0)
+            return (
+              <tr
+                key={keyOf(order)}
+                className="border-b border-slate-100 transition-colors last:border-0 hover:bg-slate-50/70"
+              >
+                <td className="whitespace-nowrap px-4 py-3 align-middle text-[13px] text-slate-600">
+                  <Link
+                    to={`/admin/orders/${order._id}`}
+                    className="text-[13px] font-semibold tabular-nums text-indigo-600 hover:underline"
+                  >
+                    #{shortId(order._id)}
+                  </Link>
+                  {order.tradeInValue > 0 && (
+                    <span className="mt-0.5 block text-[11px] font-medium text-slate-400">
+                      −{money(order.tradeInValue)} trade-in
+                    </span>
+                  )}
+                </td>
 
-              <td className="px-4 py-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <AdminAvatar name={order.user?.name} size="xs" />
-                  <div className="min-w-0">
-                    <Link to={`/admin/users/${order.user?._id}`} className="block text-sm font-semibold text-slate-700 hover:text-indigo-600 truncate max-w-[160px]">
-                      {order.user?.name || 'Unknown'}
-                    </Link>
-                    <p className="text-[11px] text-slate-500 truncate max-w-[160px]">{order.user?.email}</p>
+                <td className="px-4 py-3 align-middle text-[13px] text-slate-600">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <AdminAvatar name={order.user?.name} size="xs" />
+                    <div className="min-w-0">
+                      <Link
+                        to={`/admin/users/${order.user?._id}`}
+                        className="block max-w-[170px] truncate text-[13px] font-semibold text-slate-800 hover:text-indigo-600"
+                      >
+                        {order.user?.name || 'Guest'}
+                      </Link>
+                      <p className="max-w-[170px] truncate text-[11px] text-slate-500">{order.user?.email || '—'}</p>
+                    </div>
                   </div>
-                </div>
-              </td>
+                </td>
 
-              <td className="px-4 py-3 text-sm text-slate-600 whitespace-nowrap">
-                {pluralise(order.orderItems?.reduce((sum, item) => sum + item.quantity, 0) || 0, 'item')}
-              </td>
+                <td className="whitespace-nowrap px-4 py-3 align-middle text-[13px] text-slate-600">
+                  {pluralise(units, 'item')}
+                  {lines > 1 && <span className="mt-0.5 block text-[11px] text-slate-400">{lines} lines</span>}
+                </td>
 
-              <td className="px-4 py-3 text-sm font-bold text-slate-900 whitespace-nowrap">{money(order.totalPrice)}</td>
+                <td className="whitespace-nowrap px-4 py-3 align-middle text-[13px] font-bold tabular-nums text-slate-900">
+                  {money(order.totalPrice)}
+                </td>
 
-              <td className="px-4 py-3 whitespace-nowrap">
-                <AdminStatusBadge
-                  value={order.paymentStatus}
-                  tone={PAYMENT_TONE[order.paymentStatus]}
-                  label={order.paymentStatus}
-                />
-              </td>
+                <td className="whitespace-nowrap px-4 py-3 align-middle text-[13px] text-slate-600">
+                  <AdminStatusBadge value={order.paymentStatus} tone={PAYMENT_TONE[order.paymentStatus]} />
+                </td>
 
-              <td className="px-4 py-3">
-                <AdminStatusBadge value={order.orderStatus} tone={ORDER_TONE[order.orderStatus]} />
-              </td>
+                <td className="whitespace-nowrap px-4 py-3 align-middle text-[13px] text-slate-600">
+                  <AdminStatusBadge value={order.orderStatus} tone={ORDER_TONE[order.orderStatus]} />
+                </td>
 
-              <td className="px-4 py-3 text-xs text-slate-500 whitespace-nowrap">{formatDate(order.createdAt)}</td>
+                <td className="whitespace-nowrap px-4 py-3 align-middle text-[13px] text-slate-600">
+                  {formatDate(order.createdAt)}
+                  <span className="mt-0.5 block text-[11px] text-slate-400">{timeAgo(order.createdAt)}</span>
+                </td>
 
-              <td className="px-4 py-3">
-                <Link
-                  to={`/admin/orders/${order._id}`}
-                  title="View order"
-                  className="inline-flex p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                >
-                  <FiEye className="w-4 h-4" />
-                </Link>
-              </td>
-            </tr>
-          ))
+                <td className="px-4 py-3 align-middle text-[13px] text-slate-600">
+                  <Link
+                    to={`/admin/orders/${order._id}`}
+                    title="View order"
+                    aria-label={`View order ${shortId(order._id)}`}
+                    className={cx(
+                      'inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+                      'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+                    )}
+                  >
+                    <FiEye className="h-4 w-4" />
+                  </Link>
+                </td>
+              </tr>
+            )
+          })
         }
       </AdminTable>
 
-      <p className="mt-3 text-xs text-slate-400 text-center">
+      <p className="mt-3 text-center text-[12px] text-slate-400">
         Status changes made on an order screen also release or re-take stock automatically.
       </p>
     </>

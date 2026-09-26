@@ -79,6 +79,13 @@ const productSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Optional stock-keeping code. Admin inventory only: the storefront never
+    // reads it, and existing products stay valid with an empty value.
+    sku: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     tags: [String],
   },
   { timestamps: true }

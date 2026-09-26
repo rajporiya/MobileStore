@@ -151,7 +151,7 @@ const getProductById = asyncHandler(async (req, res) => {
 const createProduct = asyncHandler(async (req, res) => {
   const {
     title, brand, price, originalPrice, description, category,
-    specifications, stock, isFeatured, discount, tags,
+    specifications, stock, isFeatured, discount, tags, sku,
   } = req.body;
 
   // Uploaded files win; otherwise fall back to whatever URLs were supplied.
@@ -167,6 +167,7 @@ const createProduct = asyncHandler(async (req, res) => {
     isFeatured: toBool(isFeatured),
     exchangeEnabled: toBool(req.body.exchangeEnabled),
     discount: discount || 0,
+    sku: (sku || '').trim(),
     tags: tags || [],
   });
 
@@ -186,7 +187,7 @@ const updateProduct = asyncHandler(async (req, res) => {
 
   const fields = [
     'title', 'brand', 'price', 'originalPrice', 'description',
-    'category', 'stock', 'isFeatured', 'discount',
+    'category', 'stock', 'isFeatured', 'discount', 'sku',
   ];
   fields.forEach((field) => {
     if (req.body[field] !== undefined) product[field] = req.body[field];

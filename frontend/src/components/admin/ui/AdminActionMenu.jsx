@@ -1,71 +1,56 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { FiMoreVertical } from 'react-icons/fi'
 
+import AdminDropdown, { AdminDropdownItem } from './AdminDropdown'
+import { cx } from '../adminTheme'
+
 /**
- * Small click-outside dropdown for row actions. Closes on Escape, on outside
- * click and after an action is picked.
+ * Row actions menu. A thin wrapper over AdminDropdown so every table row uses
+ * the same popover behaviour and the same look.
  */
-export default function AdminActionMenu({ items, label = 'Row actions', align = 'right' }) {
+export default function AdminActionMenu({ items, label = 'Row actions', align = 'right', className = '' }) {
   const [open, setOpen] = useState(false)
-  const ref = useRef(null)
-
-  useEffect(() => {
-    if (!open) return undefined
-
-    const onClickOutside = (event) => {
-      if (ref.current && !ref.current.contains(event.target)) setOpen(false)
-    }
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-
-    document.addEventListener('mousedown', onClickOutside)
-    document.addEventListener('keydown', onKeyDown)
-    return () => {
-      document.removeEventListener('mousedown', onClickOutside)
-      document.removeEventListener('keydown', onKeyDown)
-    }
-  }, [open])
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-label={label}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-      >
-        <FiMoreVertical className="w-4 h-4" />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className={`absolute z-30 mt-1 w-44 rounded-xl bg-white border border-slate-200 shadow-lg py-1
-            ${align === 'right' ? 'right-0' : 'left-0'}`}
+    <AdminDropdown
+      width="w-48"
+      open={open}
+      onOpenChange={setOpen}
+      trigger={({ toggle, open: isOpen }) => (
+        <button
+          type="button"
+          onClick={toggle}
+          aria-label={label}
+          aria-haspopup="menu"
+          aria-expanded={isOpen}
+          className={cx(
+            'flex h-7 w-7 items-center justify-center rounded-md transition-colors',
+            isOpen ? 'bg-slate-100 text-slate-700' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700',
+            className
+          )}
         >
-          {items.map((item) => (
-            <button
+          <FiMoreVertical className="h-4 w-4" />
+        </button>
+      )}
+    >
+      {({ close }) =>
+        items
+          .filter((item) => !item.hidden)
+          .map((item) => (
+            <AdminDropdownItem
               key={item.label}
-              type="button"
-              role="menuitem"
+              icon={item.icon}
+              label={item.label}
+              description={item.description}
+              danger={item.danger}
               disabled={item.disabled}
               onClick={() => {
-                setOpen(false)
+                close()
                 item.onClick?.()
               }}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-sm text-left transition-colors
-                disabled:opacity-40 disabled:cursor-not-allowed
-                ${item.danger ? 'text-red-600 hover:bg-red-50' : 'text-slate-700 hover:bg-slate-50'}`}
-            >
-              {item.icon && <item.icon className="w-4 h-4 shrink-0" />}
-              {item.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+            />
+          ))
+      }
+    </AdminDropdown>
   )
 }

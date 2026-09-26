@@ -1,23 +1,30 @@
 import { initials } from '../../../utils/adminUtils'
+import { cx } from '../adminTheme'
 
-/** Consistent identity chip for customers, dealers and admins. */
-export default function AdminAvatar({ name, src, size = 'md', ring = false }) {
+/**
+ * Identity chip for customers, dealers and admins. Flat neutral fill rather
+ * than the storefront's gradient, so a column of avatars reads as data.
+ */
+export default function AdminAvatar({ name, src, size = 'md', ring = false, className = '' }) {
   const sizes = {
-    xs: 'w-7 h-7 text-[10px]',
-    sm: 'w-9 h-9 text-xs',
-    md: 'w-11 h-11 text-sm',
-    lg: 'w-16 h-16 text-lg',
-    xl: 'w-24 h-24 text-2xl',
+    xs: 'h-7 w-7 text-[10px]',
+    sm: 'h-8 w-8 text-[11px]',
+    md: 'h-9 w-9 text-xs',
+    lg: 'h-14 w-14 text-base',
+    xl: 'h-20 w-20 text-xl',
   }
 
   return (
     <span
-      className={`${sizes[size] || sizes.md} shrink-0 rounded-full overflow-hidden bg-gradient-to-br
-        from-indigo-500 to-violet-600 text-white font-bold flex items-center justify-center
-        ${ring ? 'ring-2 ring-white shadow-sm' : ''}`}
+      className={cx(
+        'inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-200 font-bold text-slate-600',
+        sizes[size] || sizes.md,
+        ring && 'ring-2 ring-white',
+        className
+      )}
     >
       {src ? (
-        <img src={src} alt={name || 'User'} className="w-full h-full object-cover" loading="lazy" />
+        <img src={src} alt={name || 'User'} className="h-full w-full object-cover" loading="lazy" />
       ) : (
         initials(name)
       )}

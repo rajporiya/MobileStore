@@ -1,9 +1,10 @@
 import { FiChevronDown } from 'react-icons/fi'
 import { titleCase } from '../../../utils/adminUtils'
+import { cx } from '../adminTheme'
 
 /**
  * Labelled select used by every filter bar. Options may be plain strings (the
- * backend enum value) or { value, label } when a friendlier word is wanted.
+ * backend enum value) or `{ value, label }` when a friendlier word is wanted.
  */
 export default function AdminSelect({
   label,
@@ -13,18 +14,18 @@ export default function AdminSelect({
   className = '',
   allLabel = 'All',
   showAll = true,
+  ...rest
 }) {
   return (
-    <label className={`block ${className}`}>
-      {label && <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">{label}</span>}
-      <div className="relative">
+    <label className={cx('block', className)}>
+      {label && <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wider text-slate-500">{label}</span>}
+      <span className="relative block">
         <select
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(event) => onChange(event.target.value)}
           aria-label={label}
-          className="w-full appearance-none pl-3 pr-9 py-2.5 text-sm bg-white border border-slate-200
-            rounded-xl text-slate-700 focus:outline-none focus:border-slate-400 focus:ring-2
-            focus:ring-slate-900/5 cursor-pointer"
+          className="w-full cursor-pointer appearance-none rounded-lg border border-slate-300 bg-white py-2 pl-3 pr-8 text-[13px] text-slate-700 transition-colors focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+          {...rest}
         >
           {showAll && <option value="">{allLabel}</option>}
           {options.map((option) => {
@@ -37,8 +38,8 @@ export default function AdminSelect({
             )
           })}
         </select>
-        <FiChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-      </div>
+        <FiChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+      </span>
     </label>
   )
 }

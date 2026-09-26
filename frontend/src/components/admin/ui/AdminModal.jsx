@@ -2,10 +2,12 @@ import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { FiX } from 'react-icons/fi'
 
+import { cx } from '../adminTheme'
+
 /**
- * Accessible dialog shell used by every admin overlay. Handles the backdrop
- * click, Escape to close, body scroll lock and a focus trap, so each feature
- * page does not have to reimplement modal behaviour.
+ * Dialog shell used by every admin overlay: backdrop click, Escape to close,
+ * body scroll lock and initial focus. Each feature page therefore does not have
+ * to reimplement modal behaviour.
  */
 export default function AdminModal({
   open,
@@ -47,9 +49,9 @@ export default function AdminModal({
   }
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
       <div
-        className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-900/50 backdrop-blur-[2px]"
         onClick={closeOnBackdrop ? onClose : undefined}
         aria-hidden="true"
       />
@@ -60,29 +62,30 @@ export default function AdminModal({
         aria-modal="true"
         aria-label={title}
         tabIndex={-1}
-        className={`relative w-full ${widths[size]} bg-white rounded-t-3xl sm:rounded-2xl shadow-2xl
-          max-h-[92vh] flex flex-col outline-none`}
+        className={cx(
+          'relative flex max-h-[92vh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl outline-none sm:rounded-xl',
+          widths[size]
+        )}
       >
-        <div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-slate-100">
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-3.5">
           <div className="min-w-0">
-            <h2 className="text-base font-bold text-slate-900">{title}</h2>
-            {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+            <h2 className="truncate text-[15px] font-bold text-slate-900">{title}</h2>
+            {description && <p className="mt-0.5 truncate text-[12px] text-slate-500">{description}</p>}
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="p-1.5 -mr-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="-mr-1.5 rounded-md p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
           >
-            <FiX className="w-4 h-4" />
+            <FiX className="h-4 w-4" />
           </button>
         </div>
 
-        <div className="px-5 py-4 overflow-y-auto grow">{children}</div>
+        <div className="grow overflow-y-auto px-5 py-4">{children}</div>
 
         {footer && (
-          <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-100 bg-slate-50/60 rounded-b-3xl sm:rounded-b-2xl">
-            {footer}
-          </div>
+          <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3.5">{footer}</div>
         )}
       </div>
     </div>,

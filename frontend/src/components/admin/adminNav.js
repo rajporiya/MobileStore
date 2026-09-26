@@ -1,29 +1,31 @@
 import {
-  FiGrid,
-  FiPackage,
-  FiTag,
-  FiShoppingCart,
-  FiCreditCard,
-  FiUsers,
-  FiBriefcase,
-  FiRefreshCw,
   FiBell,
+  FiBriefcase,
+  FiCheckSquare,
+  FiCreditCard,
+  FiGrid,
+  FiLogOut,
+  FiPackage,
+  FiRefreshCw,
   FiSettings,
+  FiShoppingCart,
+  FiTag,
+  FiUser,
+  FiUsers,
 } from 'react-icons/fi'
 
 /**
- * The single source of truth for admin navigation. The sidebar, the mobile
- * drawer, the command palette and the page-header breadcrumbs all read from
- * here, so a new entry can never be added to one surface and forgotten in
- * another.
+ * Single source of truth for admin navigation. The sidebar, the mobile drawer,
+ * the topbar breadcrumbs and the command search all read from here, so an entry
+ * can never appear on one surface and be missing from another.
  *
- * `path` is the canonical route. `aliases` exist only so the original VoltCart
- * admin URLs keep working after the section renames.
+ * `to` is the canonical route. `aliases` exist only so the original VoltCart
+ * admin URLs keep resolving after the section renames.
  */
 export const ADMIN_NAV = [
   {
     section: 'Overview',
-    items: [{ label: 'Dashboard', to: '/admin/dashboard', icon: FiGrid, exact: true }],
+    items: [{ label: 'Dashboard', to: '/admin', icon: FiGrid, exact: true }],
   },
   {
     section: 'Catalog',
@@ -48,7 +50,9 @@ export const ADMIN_NAV = [
   },
   {
     section: 'Trade-in',
-    items: [{ label: 'Trade-in', to: '/admin/trade-ins', icon: FiRefreshCw, aliases: ['/admin/exchange'] }],
+    items: [
+      { label: 'Trade-in Requests', to: '/admin/trade-ins', icon: FiRefreshCw, aliases: ['/admin/exchange'] },
+    ],
   },
   {
     section: 'System',
@@ -61,7 +65,16 @@ export const ADMIN_NAV = [
 
 export const ADMIN_NAV_ITEMS = ADMIN_NAV.flatMap((group) => group.items)
 
-/** Matches both the canonical path and any legacy alias. */
+/** Footer block of the sidebar — profile shortcut plus sign out. */
+export const ADMIN_ACCOUNT_NAV = [
+  { label: 'Admin Profile', to: '/admin/settings?tab=profile', icon: FiUser },
+  { label: 'Logout', action: 'logout', icon: FiLogOut },
+]
+
+/** Used by the topbar to title a page even when it is not in the sidebar. */
+export const ADMIN_ICON = FiCheckSquare
+
+/** Matches the canonical path and any legacy alias. */
 export const isNavActive = (item, pathname) => {
   const paths = [item.to, ...(item.aliases || [])]
   if (item.exact) return paths.includes(pathname)

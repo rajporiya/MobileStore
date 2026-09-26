@@ -1,20 +1,20 @@
-/** Page title + description + right-aligned actions, used on every admin page. */
-export default function AdminPageHeader({ title, description, icon: Icon, actions, breadcrumb }) {
+import { cx } from '../adminTheme'
+
+/**
+ * Page title + description + right-aligned actions. `eyebrow` is the small
+ * uppercase kicker above the title; the breadcrumb normally lives in the topbar
+ * so it is not repeated here.
+ */
+export default function AdminPageHeader({ title, description, eyebrow, actions, meta, className = '' }) {
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-      <div className="flex items-start gap-3 min-w-0">
-        {Icon && (
-          <span className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
-            <Icon className="w-[18px] h-[18px]" />
-          </span>
-        )}
-        <div className="min-w-0">
-          {breadcrumb}
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight truncate">{title}</h1>
-          {description && <p className="text-xs sm:text-sm text-slate-500 mt-0.5">{description}</p>}
-        </div>
+    <header className={cx('mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between', className)}>
+      <div className="min-w-0">
+        {eyebrow && <p className="text-[11px] font-semibold uppercase tracking-wider text-indigo-600">{eyebrow}</p>}
+        <h1 className="text-[22px] font-bold tracking-tight text-slate-900 sm:text-[26px]">{title}</h1>
+        {description && <p className="mt-0.5 text-[13px] text-slate-500">{description}</p>}
+        {meta && <div className="mt-2 flex flex-wrap items-center gap-2">{meta}</div>}
       </div>
-      {actions && <div className="flex items-center gap-2 shrink-0 flex-wrap">{actions}</div>}
-    </div>
+      {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+    </header>
   )
 }

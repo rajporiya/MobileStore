@@ -151,3 +151,26 @@ export const toDateInput = (value) => {
   if (Number.isNaN(date.getTime())) return ''
   return date.toISOString().slice(0, 10)
 }
+
+/**
+ * Percentage change between two real measurements. Returns null when the
+ * baseline is zero, because "0 → 800" has no meaningful percentage and showing
+ * "+∞%" would be worse than showing nothing at all.
+ */
+export const percentChange = (current, previous) => {
+  const now = Number(current || 0)
+  const before = Number(previous || 0)
+  if (before === 0) return null
+  return ((now - before) / before) * 100
+}
+
+// Window labels shared by the dashboard range switcher and the delta captions.
+export const RANGE_LABELS = {
+  '7d': { short: '7 days', long: 'last 7 days', previous: 'previous 7 days' },
+  '30d': { short: '30 days', long: 'last 30 days', previous: 'previous 30 days' },
+  '90d': { short: '3 months', long: 'last 3 months', previous: 'previous 3 months' },
+  '180d': { short: '6 months', long: 'last 6 months', previous: 'previous 6 months' },
+  '365d': { short: '1 year', long: 'last 12 months', previous: 'previous 12 months' },
+}
+
+export const rangeLabel = (range, variant = 'short') => RANGE_LABELS[range]?.[variant] || 'this period'

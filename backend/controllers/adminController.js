@@ -78,6 +78,13 @@ const getDashboard = asyncHandler(async (req, res) => {
   const from = startOfDay(new Date(now.getTime() - (days - 1) * 24 * 60 * 60 * 1000));
   const daily = days <= 90;
 
+  // The window immediately before the selected one, of the same length. Without
+  // it a dashboard can only ever show absolute numbers, and any "vs last month"
+  // percentage would have to be invented. Same range key, so the client can
+  // label the comparison without duplicating the range table.
+  const previousTo = from;
+  const previousFrom = new Date(from.getTime() - days * 24 * 60 * 60 * 1000);
+
   const [
     totalUsers,
     activeUsers,
@@ -104,6 +111,11 @@ const getDashboard = asyncHandler(async (req, res) => {
     lowStockRows,
     newUsersInRange,
     ordersInRange,
+    newProductsInRange,
+    previousRevenue,
+    previousOrders,
+    previousUsers,
+    previousProducts,
   ] = await Promise.all([
     User.countDocuments({ role: 'user' }),
     User.countDocuments({ role: 'user', isActive: { $ne: false } }),
@@ -201,12 +213,43 @@ const getDashboard = asyncHandler(async (req, res) => {
 
     User.countDocuments({ role: 'user', createdAt: { $gte: from } }),
     Order.countDocuments({ createdAt: { $gte: from } }),
+    Product.countDocuments({ createdAt: { $gte: from } }),
+
+    // Preceding window, used only for the change indicators on the stat cards.
+    Order.aggregate([
+      { $match: { ...PAID_NOT_CANCELLED, createdAt: { $gte: previousFrom, $lt: previousTo } } },
+      { $group: { _id: null, total: { $sum: '$totalPrice' } } },
+    ]).then((r) => r[0]?.total || 0),
+    Order.countDocuments({ createdAt: { $gte: previousFrom, $lt: previousTo } }),
+    User.countDocuments({ role: 'user', createdAt: { $gte: previousFrom, $lt: previousTo } }),
+    Product.countDocuments({ createdAt: { $gte: previousFrom, $lt: previousTo } }),
   ]);
 
   const orderCounts = countMap(ordersByStatus);
   const paymentCounts = countMap(paymentsByStatus);
   const tradeInCounts = countMap(sellByStatus);
   const inFlight = ['processing', 'confirmed', 'shipped'];
+
+  // The aggregation above can only read fields that were copied onto the order
+  // line, so the category is joined afterwards. Without it the best-seller
+  // table would have to guess it from the title.
+  const bestSellerIds = bestSellers.map((item) => item._id);
+  const categoryByProduct = new Map();
+  if (bestSellerIds.length > 0) {
+    const rows = await Product.find({ _id: { $in: bestSellerIds } })
+      .populate('category', 'name')
+      .select('_id category')
+      .lean();
+    rows.forEach((row) => categoryByProduct.set(String(row._id), row.category?.name || ''));
+  }
+
+  // Revenue inside the selected window. The series is gap-filled, so summing it
+  // is the same number as a direct aggregate over the window.
+  const revenueSeries = daily
+    ? buildDailySeries(from, startOfDay(now), revenueRows)
+    : buildMonthlySeries(from, revenueRows);
+  const rangeRevenue = revenueSeries.reduce((sum, point) => sum + (point.revenue || 0), 0);
+  const rangeOrders = revenueSeries.reduce((sum, point) => sum + (point.orders || 0), 0);
 
   res.json({
     success: true,
@@ -235,20 +278,35 @@ const getDashboard = asyncHandler(async (req, res) => {
         exchangeCredit: exchangeCreditResult,
         newUsersInRange,
         ordersInRange,
+        newProductsInRange,
+        rangeRevenue,
+        rangeOrders,
+      },
+      // Same-length window immediately before the selected one, so the stat
+      // cards can show a real change instead of a guessed percentage.
+      previous: {
+        range,
+        from: previousFrom,
+        to: previousTo,
+        revenue: previousRevenue,
+        orders: previousOrders,
+        users: previousUsers,
+        products: previousProducts,
       },
       ordersByStatus: orderCounts,
       paymentsByStatus: paymentCounts,
       tradeInsByStatus: tradeInCounts,
       inFlight: inFlight.reduce((sum, key) => sum + (orderCounts[key] || 0), 0),
       completed: orderCounts.delivered || 0,
-      revenueSeries: daily
-        ? buildDailySeries(from, startOfDay(now), revenueRows)
-        : buildMonthlySeries(from, revenueRows),
+      revenueSeries,
       recentOrders,
       recentUsers,
       recentDealers,
       recentTradeIns,
-      bestSellers,
+      bestSellers: bestSellers.map((item) => ({
+        ...item,
+        category: categoryByProduct.get(String(item._id)) || '',
+      })),
       lowStockProducts: lowStockRows,
     },
   });
