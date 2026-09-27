@@ -217,14 +217,26 @@ const addToWishlist = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id);
   const { productId } = req.params;
 
-  if (user.wishlist.includes(productId)) {
-    user.wishlist = user.wishlist.filter((id) => id.toString() !== productId);
+  // `wishlist` stores ObjectIds, which are never strictly equal to the string
+  // from req.params — so Array.includes(productId) was always false and the
+  // remove branch never ran. Compare as strings instead; filtering by string
+  // also clears any duplicates earlier clicks pushed in.
+  const exists = user.wishlist.some((id) => String(id) === String(productId));
+
+  if (exists) {
+    user.wishlist = user.wishlist.filter((id) => String(id) !== String(productId));
   } else {
     user.wishlist.push(productId);
   }
 
   await user.save();
-  res.json({ success: true, data: user.wishlist });
+
+  // Return the populated wishlist so the client can replace its state directly.
+  const updated = await User.findById(user._id).populate({
+    path: 'wishlist',
+    populate: { path: 'category', select: 'name' },
+  });
+  res.json({ success: true, data: updated.wishlist });
 });
 
 // @desc  Get wishlist

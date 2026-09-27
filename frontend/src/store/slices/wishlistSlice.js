@@ -11,9 +11,11 @@ export const fetchWishlist = createAsyncThunk('wishlist/fetch', async (_, { reje
   }
 })
 
-export const toggleWishlist = createAsyncThunk('wishlist/toggle', async (productId, { rejectWithValue, getState }) => {
+export const toggleWishlist = createAsyncThunk('wishlist/toggle', async (productId, { rejectWithValue }) => {
   try {
     const { data } = await api.post(`/users/wishlist/${productId}`)
+    // The API now returns the full populated wishlist after toggling, so the
+    // slice can replace its state without a second request.
     return data.data
   } catch (err) {
     return rejectWithValue(err.response?.data?.message)
@@ -26,16 +28,29 @@ const wishlistSlice = createSlice({
     items: [],
     loading: false,
   },
-  reducers: {},
+  reducers: {
+    // Called on logout / session end so stale items don't leak into a new session.
+    clearWishlist(state) {
+      state.items = []
+      state.loading = false
+    },
+  },
   extraReducers: (builder) => {
     builder
       .addCase(fetchWishlist.fulfilled, (state, action) => {
         state.items = action.payload
+        state.loading = false
       })
-      .addCase(toggleWishlist.pending, (state) => { state.loading = true })
+      .addCase(fetchWishlist.rejected, (state) => {
+        state.loading = false
+      })
+      .addCase(toggleWishlist.pending, (state) => {
+        state.loading = true
+      })
       .addCase(toggleWishlist.fulfilled, (state, action) => {
         state.loading = false
-        // The API returns the updated wishlist IDs, refetch will update items
+        // Replace state with the server's view — no refetch, no race window.
+        state.items = action.payload
         toast.success('Wishlist updated!')
       })
       .addCase(toggleWishlist.rejected, (state, action) => {
@@ -45,4 +60,5 @@ const wishlistSlice = createSlice({
   },
 })
 
+export const { clearWishlist } = wishlistSlice.actions
 export default wishlistSlice.reducer

@@ -42,8 +42,9 @@ export default function ProductDetailPage() {
 
   const handleWishlist = () => {
     if (!userInfo) { navigate('/login'); return }
+    // toggleWishlist replaces state with the server response; a parallel
+    // fetchWishlist here raced against it and could restore the old list.
     dispatch(toggleWishlist(product._id))
-    dispatch(fetchWishlist())
   }
 
   const handleReviewSubmit = async (e) => {
