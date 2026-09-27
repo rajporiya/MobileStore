@@ -28,13 +28,39 @@ export const fetchFeaturedProducts = createAsyncThunk('products/fetchFeatured', 
   }
 })
 
+export const fetchCategories = createAsyncThunk('products/fetchCategories', async (_, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/categories')
+    return data.data || []
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || 'Failed to fetch categories')
+  }
+})
+
+export const fetchLatestProducts = createAsyncThunk('products/fetchLatest', async (_, { rejectWithValue }) => {
+  try {
+    const { data } = await api.get('/products', { params: { sort: 'newest', page: 1, limit: 8 } })
+    return data.data || []
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || 'Failed to fetch latest products')
+  }
+})
+
 const productSlice = createSlice({
   name: 'products',
   initialState: {
     items: [],
     featured: [],
+    latest: [],
+    categories: [],
+    featuredLoaded: false,
+    latestLoaded: false,
+    categoriesLoaded: false,
     selectedProduct: null,
     loading: false,
+    // `fetching` is true for every fetchProducts run even when cached items
+    // are on screen — the page dims the grid while it's set.
+    fetching: false,
     error: null,
     page: 1,
     pages: 1,
@@ -47,9 +73,14 @@ const productSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchProducts.pending, (state) => { state.loading = true; state.error = null })
+      .addCase(fetchProducts.pending, (state) => {
+        state.loading = state.items.length === 0
+        state.fetching = true
+        state.error = null
+      })
       .addCase(fetchProducts.fulfilled, (state, action) => {
         state.loading = false
+        state.fetching = false
         state.items = action.payload.data
         state.page = action.payload.page
         state.pages = action.payload.pages
@@ -57,6 +88,7 @@ const productSlice = createSlice({
       })
       .addCase(fetchProducts.rejected, (state, action) => {
         state.loading = false
+        state.fetching = false
         state.error = action.payload
       })
       .addCase(fetchProductById.pending, (state) => { state.loading = true; state.error = null })
@@ -68,8 +100,20 @@ const productSlice = createSlice({
         state.loading = false
         state.error = action.payload
       })
+      .addCase(fetchFeaturedProducts.pending, (state) => {
+        state.error = null
+      })
       .addCase(fetchFeaturedProducts.fulfilled, (state, action) => {
         state.featured = action.payload
+        state.featuredLoaded = true
+      })
+      .addCase(fetchLatestProducts.fulfilled, (state, action) => {
+        state.latest = action.payload
+        state.latestLoaded = true
+      })
+      .addCase(fetchCategories.fulfilled, (state, action) => {
+        state.categories = action.payload
+        state.categoriesLoaded = true
       })
   },
 })

@@ -17,7 +17,11 @@ const SORT_OPTIONS = [
 export default function ProductsPage() {
   const dispatch = useDispatch()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { items, loading, page, pages, total } = useSelector((s) => s.products)
+  // `loading` only flips true when the cache is empty, so returning to this
+  // page (or changing filters) shows the existing grid while data refreshes —
+  // no skeleton flash between visits. `fetching` drives a soft dim over the
+  // grid so a content swap never hard-flickers the page.
+  const { items, loading, fetching, page, pages, total } = useSelector((s) => s.products)
 
   const [filterOpen, setFilterOpen] = useState(false)
   const [categories, setCategories] = useState([])
@@ -179,7 +183,11 @@ export default function ProductsPage() {
           <button onClick={clearFilters} className="btn-primary">Clear Filters</button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
+        <div
+          className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6 transition-opacity duration-300 ${
+            fetching ? 'opacity-40 pointer-events-none' : 'opacity-100'
+          }`}
+        >
           {items.map((product) => (
             <ProductCard key={product._id} product={product} />
           ))}

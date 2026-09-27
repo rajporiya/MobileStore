@@ -1,11 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link } from 'react-router-dom'
 import { FiArrowRight, FiTruck, FiShield, FiRefreshCw, FiHeadphones, FiStar } from 'react-icons/fi'
-import { fetchFeaturedProducts } from '../../store/slices/productSlice'
+import { fetchFeaturedProducts, fetchCategories, fetchLatestProducts } from '../../store/slices/productSlice'
 import ProductCard from '../../components/user/ProductCard'
 import { ProductCardSkeleton } from '../../components/common/Skeletons'
-import api from '../../services/api'
 
 const features = [
   { icon: FiTruck, title: 'Free Delivery', desc: 'On qualifying orders', color: 'from-indigo-500 to-blue-500' },
@@ -16,21 +15,15 @@ const features = [
 
 export default function HomePage() {
   const dispatch = useDispatch()
-  const { featured, loading } = useSelector((s) => s.products)
+  const { featured, latest, categories, featuredLoaded } = useSelector((s) => s.products)
   const { userInfo } = useSelector((s) => s.auth)
-  const [categories, setCategories] = useState([])
-  const [latest, setLatest] = useState([])
-  const [latestLoading, setLatestLoading] = useState(true)
 
+  // Data lives in redux and is cached between visits: it renders instantly
+  // from cache and quietly refreshes in the background, so nothing flashes.
   useEffect(() => {
     dispatch(fetchFeaturedProducts())
-    api.get('/categories')
-      .then((res) => setCategories(res.data.data || []))
-      .catch(() => setCategories([]))
-    api.get('/products', { params: { sort: 'newest', page: 1, limit: 8 } })
-      .then((res) => setLatest(res.data.data || []))
-      .catch(() => setLatest([]))
-      .finally(() => setLatestLoading(false))
+    dispatch(fetchCategories())
+    dispatch(fetchLatestProducts())
   }, [dispatch])
 
   return (
@@ -150,7 +143,9 @@ export default function HomePage() {
           </Link>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-          {loading ? [...Array(8)].map((_, i) => <ProductCardSkeleton key={i} />) : featured.slice(0, 8).map((product) => <ProductCard key={product._id} product={product} />)}
+          {!featuredLoaded
+            ? [...Array(8)].map((_, i) => <ProductCardSkeleton key={i} />)
+            : featured.slice(0, 8).map((product) => <ProductCard key={product._id} product={product} />)}
         </div>
       </section>
 
@@ -166,9 +161,7 @@ export default function HomePage() {
           </Link>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-          {latestLoading
-            ? [...Array(4)].map((_, i) => <ProductCardSkeleton key={i} />)
-            : latest.map((product) => <ProductCard key={product._id} product={product} />)}
+          {latest.map((product) => <ProductCard key={product._id} product={product} />)}
         </div>
       </section>
 
