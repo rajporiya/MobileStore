@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { Link, useNavigate } from 'react-router-dom'
 import { FiCreditCard, FiTruck, FiCheckCircle, FiRepeat } from 'react-icons/fi'
-import { createOrder } from '../../store/slices/orderSlice'
+import { createOrder, markOrderPaid } from '../../store/slices/orderSlice'
+import api from '../../services/api'
+import toast from 'react-hot-toast'
 import { clearCart, selectCartItems, selectCartTotal } from '../../store/slices/cartSlice'
 import { fetchMyRequests } from '../../store/slices/tradeInSlice'
 
@@ -68,6 +70,29 @@ export default function CheckoutPage() {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
 
+  const openRazorpayCheckout = (rzpOrder, order) =>
+    new Promise((resolve) => {
+      const options = {
+        key: rzpOrder.key,
+        amount: rzpOrder.amount,
+        currency: rzpOrder.currency,
+        name: 'VoltCart',
+        description: `Order ${order._id}`,
+        order_id: rzpOrder.id,
+        prefill: {
+          name: form.fullName,
+          contact: form.phone,
+        },
+        theme: { color: '#4f46e5' },
+        modal: {
+          ondismiss: () => resolve({ status: 'dismissed' }),
+        },
+        handler: (response) => resolve(response),
+      }
+      const rzp = new window.Razorpay(options)
+      rzp.open()
+    })
+
   const handlePlaceOrder = async () => {
     const orderData = {
       orderItems: cartItems.map((item) => ({
@@ -77,6 +102,54 @@ export default function CheckoutPage() {
       shippingAddress: form,
       paymentMethod,
       tradeInRequestId: selectedTradeIn?._id || undefined,
+    }
+
+    // Razorpay: create the DB order first, then open Razorpay test/live checkout
+    // before navigating away, so payment is collected and verified up front.
+    if (paymentMethod === 'razorpay') {
+      let order
+      try {
+        const result = await dispatch(createOrder(orderData))
+        if (!createOrder.fulfilled.match(result)) return
+        order = result.payload
+      } catch {
+        return
+      }
+
+      let rzpOrder
+      try {
+        const { data } = await api.post('/payment/razorpay', { amount: order.totalPrice })
+        rzpOrder = data.data
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Could not start Razorpay payment')
+        return
+      }
+
+      const payment = await openRazorpayCheckout(rzpOrder, order)
+      if (payment.status === 'dismissed') {
+        toast.error('Payment cancelled')
+        return
+      }
+
+      try {
+        // Server-side signature check, then record the payment on the order.
+        await api.post('/payment/razorpay/verify', payment)
+        await dispatch(
+          markOrderPaid({
+            id: order._id,
+            paymentResult: {
+              id: payment.razorpay_payment_id,
+              status: 'completed',
+              update_time: new Date().toISOString(),
+            },
+          })
+        )
+        dispatch(clearCart())
+        navigate(`/order-success/${order._id}`)
+      } catch (err) {
+        toast.error(err.response?.data?.message || 'Payment verification failed')
+      }
+      return
     }
 
     const result = await dispatch(createOrder(orderData))

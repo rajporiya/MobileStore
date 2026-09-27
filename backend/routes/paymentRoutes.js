@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const asyncHandler = require('express-async-handler');
+const crypto = require('crypto');
 const { protect } = require('../middleware/authMiddleware');
 
 // @desc  Create Razorpay order
@@ -33,6 +34,32 @@ router.post(
       success: true,
       data: { ...order, key: process.env.RAZORPAY_KEY_ID },
     });
+  })
+);
+
+// @desc  Verify Razorpay payment signature (client calls this after checkout closes)
+// @route POST /api/payment/razorpay/verify
+router.post(
+  '/razorpay/verify',
+  protect,
+  asyncHandler(async (req, res) => {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      res.status(400);
+      throw new Error('Missing Razorpay payment details');
+    }
+
+    const hmac = crypto.createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '');
+    hmac.update(`${razorpay_order_id}|${razorpay_payment_id}`);
+    const expectedSignature = hmac.digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      res.status(400);
+      throw new Error('Invalid payment signature');
+    }
+
+    res.json({ success: true, data: { verified: true } });
   })
 );
 

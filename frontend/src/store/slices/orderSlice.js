@@ -11,6 +11,15 @@ export const createOrder = createAsyncThunk('orders/create', async (orderData, {
   }
 })
 
+export const markOrderPaid = createAsyncThunk('orders/markPaid', async ({ id, paymentResult }, { rejectWithValue }) => {
+  try {
+    const { data } = await api.put(`/orders/${id}/pay`, paymentResult)
+    return data.data
+  } catch (err) {
+    return rejectWithValue(err.response?.data?.message || 'Failed to mark order as paid')
+  }
+})
+
 export const fetchMyOrders = createAsyncThunk('orders/fetchMine', async (_, { rejectWithValue }) => {
   try {
     const { data } = await api.get('/orders/myorders')
@@ -74,6 +83,12 @@ const orderSlice = createSlice({
         state.loading = false
         state.error = action.payload
         toast.error(action.payload)
+      })
+      .addCase(markOrderPaid.fulfilled, (state, action) => {
+        state.currentOrder = action.payload
+      })
+      .addCase(markOrderPaid.rejected, (state) => {
+        toast.error('Payment succeeded but we could not update the order status')
       })
       .addCase(fetchMyOrders.pending, (state) => { state.loading = true })
       .addCase(fetchMyOrders.fulfilled, (state, action) => {
